@@ -1,14 +1,14 @@
-from django.db import models, connections, router
 from django.contrib.auth.models import User, AnonymousUser
 from django.contrib.contenttypes import generic
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites.models import Site
+from django.db import models, connections, router
 
-from sumo.helpers import urlparams
-from sumo.models import ModelBase
-# TODO: Find the implementation of reverse() according to a setting, or turn
-# sumo's reverse() into a monkeypatch to Django's.
-from sumo.urlresolvers import reverse
+from notifications.utils import import_from_setting, reverse
+
+
+ModelBase = import_from_setting('NOTIFICATIONS_MODEL_BASE',
+                                'django.db.models.Model')
 
 
 def multi_raw(query, params, models):
@@ -77,9 +77,9 @@ class Watch(ModelBase):
 
     def unsubscribe_url(self):
         """Return the absolute URL to visit to delete me."""
-        server_relative = urlparams(
-            reverse('notifications.unsubscribe', args=[self.pk]),
-            s=self.secret)
+        server_relative = ('%s?s=%s' % (reverse('notifications.unsubscribe',
+                                        args=[self.pk]),
+                                        self.secret))
         return 'https://%s%s' % (Site.objects.get_current().domain,
                                  server_relative)
 

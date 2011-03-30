@@ -2,7 +2,7 @@ from nose.tools import eq_
 
 from notifications.models import WatchFilter, EmailUser
 from notifications.tests import watch, watch_filter
-from sumo.tests import TestCase
+from notifications.tests import TestCase
 
 
 # TODO: write a test to ensure that event types don't collide
@@ -15,7 +15,10 @@ class WatchTests(TestCase):
 
     def test_unsubscribe_url(self):
         """Make sure unsubscribe_url() returns something URL-ish."""
-        assert watch().unsubscribe_url().startswith('http')
+        w = watch()
+        url = w.unsubscribe_url()
+        assert url.startswith('http')
+        assert url.endswith('?s=%s' % w.secret)
 
 
 class WatchFilterTests(TestCase):
