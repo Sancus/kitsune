@@ -7,7 +7,7 @@
 {% set crumbs = [(url('forums.forums'), _('Forums')),
                  (url('forums.threads', forum.slug), forum.name),
                  (None, thread.title)] %}
-{% set canonical_url = thread.get_absolute_url() %}
+{% set canonical_url = unlocalized_url('forums.posts', forum.slug, thread.id) %}
 {% if posts.number > 1 %}
   {% set canonical_url = canonical_url|urlparams(page=posts.number) %}
 {% endif %}
@@ -95,7 +95,7 @@
     <p>{{ _('Oh, no! Looks like there are no posts!') }}</p>
   {% endif %}
 
-  {% if user.is_authenticated() and not thread.is_locked %}
+  {% if user.is_authenticated() and not thread.is_locked and forum.allows_posting_by(user) %}
     <div id="thread-reply">
       <h3>{{ _('Post a reply') }}</h3>
 

@@ -4,6 +4,7 @@ import re
 import urlparse
 
 from django.conf import settings
+from django.core.urlresolvers import reverse as django_reverse
 from django.http import QueryDict
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
@@ -40,9 +41,19 @@ def mobile_paginator(pager):
 
 @register.function
 def url(viewname, *args, **kwargs):
-    """Helper for Django's ``reverse`` in templates."""
+    """Helper for Django's ``reverse`` in templates.
+
+    Uses sumo's locale-aware reverse."""
     locale = kwargs.pop('locale', None)
     return reverse(viewname, locale=locale, args=args, kwargs=kwargs)
+
+
+@register.function
+def unlocalized_url(viewname, *args, **kwargs):
+    """Helper for Django's ``reverse`` in templates.
+
+    Uses django's default reverse."""
+    return django_reverse(viewname, args=args, kwargs=kwargs)
 
 
 @register.filter
@@ -76,9 +87,11 @@ def urlparams(url_, hash=None, query_dict=None, **query):
 
 
 @register.filter
-def wiki_to_html(wiki_markup, locale=settings.WIKI_DEFAULT_LANGUAGE):
+def wiki_to_html(wiki_markup, locale=settings.WIKI_DEFAULT_LANGUAGE,
+                 nofollow=False):
     """Wiki Markup -> HTML jinja2.Markup object"""
-    return jinja2.Markup(sumo.parser.wiki_to_html(wiki_markup, locale=locale))
+    return jinja2.Markup(sumo.parser.wiki_to_html(wiki_markup, locale=locale,
+                                                  nofollow=nofollow))
 
 
 class Paginator(object):

@@ -2,6 +2,7 @@
 {% extends "users/base.html" %}
 {% set title = _('{user} | Profile')|f(user=profile.user.username) %}
 {% set classes = 'profile' %}
+{% set canonical_url = unlocalized_url('users.profile', profile.user.pk) %}
 
 {% block content %}
   <article id="profile" class="main">
@@ -70,7 +71,7 @@
       {% if profile.bio %}
         <div id="bio">
           <h2>{{ _('About {user}')|f(user=display_name(profile.user)) }}</h2>
-          {{ profile.bio|wiki_to_html }}
+          {{ profile.bio|wiki_to_html(nofollow=True) }}
         </div>
       {% endif %}
     </section>
