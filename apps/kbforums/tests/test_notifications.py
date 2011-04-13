@@ -8,17 +8,14 @@ from nose.tools import eq_
 from kbforums.events import NewPostEvent, NewThreadEvent
 from kbforums.models import Thread, Post
 from kbforums.tests import KBForumTestCase
-from sumo.tests import post, attrs_eq
+from sumo.tests import post, attrs_eq, starts_with
 from wiki.models import Document
 
 
 # Some of these contain a locale prefix on included links, while others don't.
 # This depends on whether the tests use them inside or outside the scope of a
 # request. See the long explanation in questions.tests.test_notifications.
-EMAIL_CONTENT = (
-    u"""
-
-Reply to thread: Sticky Thread
+REPLY_EMAIL = u"""Reply to thread: Sticky Thread
 
 User jsocol has replied to a thread you're watching. Here
 is their reply:
@@ -33,10 +30,11 @@ To view this post on the site, click the following link, or
 paste it into your browser's location bar:
 
 https://testserver/en-US/kb/article-title/discuss/2#post-%s
-""",
-    u"""
 
-New thread: a title
+--
+Unsubscribe from these emails:
+https://testserver/en-US/unsubscribe/"""
+NEW_THREAD_EMAIL = u"""New thread: a title
 
 User jsocol has posted a new thread in a forum you're watching.
 Here is the thread:
@@ -51,13 +49,16 @@ To view this post on the site, click the following link, or
 paste it into your browser's location bar:
 
 https://testserver/en-US/kb/article-title/discuss/%s
-""",)
+
+--
+Unsubscribe from these emails:
+https://testserver/en-US/unsubscribe/"""
 
 
 class NotificationsTests(KBForumTestCase):
     """Test that notifications get sent."""
 
-    @mock.patch_object(NewPostEvent, 'fire')
+    @mock.patch.object(NewPostEvent, 'fire')
     def test_fire_on_reply(self, fire):
         """The event fires when there is a reply."""
         t = Thread.objects.get(pk=2)
@@ -67,7 +68,7 @@ class NotificationsTests(KBForumTestCase):
         # NewPostEvent.fire() is called.
         assert fire.called
 
-    @mock.patch_object(NewThreadEvent, 'fire')
+    @mock.patch.object(NewThreadEvent, 'fire')
     def test_fire_on_new_thread(self, fire):
         """The event fires when there is a new thread."""
         d = Document.objects.get(pk=1)
@@ -112,7 +113,7 @@ class NotificationsTests(KBForumTestCase):
                    'NewThreadEvent should not be notifying.')
         return document
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_thread_then_reply(self, get_current):
         """The event fires and sends emails when watching a thread."""
         get_current.return_value.domain = 'testserver'
@@ -124,8 +125,8 @@ class NotificationsTests(KBForumTestCase):
 
         p = Post.objects.all().order_by('-id')[0]
         attrs_eq(mail.outbox[0], to=['user47963@nowhere'],
-                 subject='Reply to: Sticky Thread',
-                 body=EMAIL_CONTENT[0] % p.id)
+                 subject='Reply to: Sticky Thread')
+        starts_with(mail.outbox[0].body, REPLY_EMAIL % p.id)
 
         self._toggle_watch_thread_as('pcraciunoiu', turn_on=False)
 
@@ -140,7 +141,7 @@ class NotificationsTests(KBForumTestCase):
 
         assert not mail.outbox
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_forum_then_new_thread(self, get_current):
         """Watching a forum and creating a new thread should send email."""
         get_current.return_value.domain = 'testserver'
@@ -152,12 +153,12 @@ class NotificationsTests(KBForumTestCase):
 
         t = Thread.objects.all().order_by('-id')[0]
         attrs_eq(mail.outbox[0], to=['user47963@nowhere'],
-                 subject=u'New thread in an article title: a title',
-                 body=EMAIL_CONTENT[1] % t.id)
+                 subject=u'New thread in an article title: a title')
+        starts_with(mail.outbox[0].body, NEW_THREAD_EMAIL % t.id)
 
         self._toggle_watch_kbforum_as('pcraciunoiu', turn_on=False)
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_forum_then_new_thread_as_self(self, get_current):
         """Watching a forum and creating a new thread as myself should not
         send email."""
@@ -170,7 +171,7 @@ class NotificationsTests(KBForumTestCase):
         # Assert no email is sent.
         assert not mail.outbox
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_forum_then_new_post(self, get_current):
         """Watching a forum and replying to a thread should send email."""
         get_current.return_value.domain = 'testserver'
@@ -183,10 +184,10 @@ class NotificationsTests(KBForumTestCase):
 
         p = Post.objects.all().order_by('-id')[0]
         attrs_eq(mail.outbox[0], to=['user47963@nowhere'],
-                 subject='Reply to: Sticky Thread',
-                 body=EMAIL_CONTENT[0] % p.id)
+                 subject='Reply to: Sticky Thread')
+        starts_with(mail.outbox[0].body, REPLY_EMAIL % p.id)
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_forum_then_new_post_as_self(self, get_current):
         """Watching a forum and replying as myself should not send email."""
         get_current.return_value.domain = 'testserver'
@@ -199,7 +200,7 @@ class NotificationsTests(KBForumTestCase):
         # Assert no email is sent.
         assert not mail.outbox
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_both_then_new_post(self, get_current):
         """Watching both and replying to a thread should send ONE email."""
         get_current.return_value.domain = 'testserver'
@@ -215,8 +216,97 @@ class NotificationsTests(KBForumTestCase):
         eq_(1, len(mail.outbox))
         p = Post.objects.all().order_by('-id')[0]
         attrs_eq(mail.outbox[0], to=['user47963@nowhere'],
-                 subject='Reply to: Sticky Thread',
-                 body=EMAIL_CONTENT[0] % p.id)
+                 subject='Reply to: Sticky Thread')
+        starts_with(mail.outbox[0].body, REPLY_EMAIL % p.id)
 
         self._toggle_watch_kbforum_as('pcraciunoiu', turn_on=False)
         self._toggle_watch_thread_as('pcraciunoiu', turn_on=False)
+
+    @mock.patch.object(Site.objects, 'get_current')
+    def test_watch_locale_then_new_post(self, get_current):
+        """Watching locale and reply to a thread."""
+        get_current.return_value.domain = 'testserver'
+
+        d = Document.objects.filter(locale='en-US')[0]
+        t = d.thread_set.all()[0]
+        # Log in as pcraciunoiu.
+        self.client.login(username='pcraciunoiu', password='testpass')
+        post(self.client, 'wiki.discuss.watch_locale', {'watch': 'yes'})
+
+        # Reply as jsocol to document d.
+        self.client.login(username='jsocol', password='testpass')
+        post(self.client, 'wiki.discuss.reply', {'content': 'a post'},
+             args=[d.slug, t.id])
+
+        # Email was sent as expected.
+        eq_(1, len(mail.outbox))
+        p = Post.objects.all().order_by('-id')[0]
+        attrs_eq(mail.outbox[0], to=['user47963@nowhere'],
+                 subject='Reply to: Sticky Thread')
+        starts_with(mail.outbox[0].body, REPLY_EMAIL % p.id)
+
+    @mock.patch.object(Site.objects, 'get_current')
+    def test_watch_all_then_new_post(self, get_current):
+        """Watching document + thread + locale and reply to thread."""
+        get_current.return_value.domain = 'testserver'
+
+        d = self._toggle_watch_kbforum_as('pcraciunoiu', turn_on=True)
+        t = d.thread_set.all()[0]
+        self._toggle_watch_thread_as('pcraciunoiu', turn_on=True,
+                                     thread_id=t.id)
+        # Log in as pcraciunoiu.
+        self.client.login(username='pcraciunoiu', password='testpass')
+        post(self.client, 'wiki.discuss.watch_locale', {'watch': 'yes'})
+
+        # Reply as jsocol to document d.
+        self.client.login(username='jsocol', password='testpass')
+        post(self.client, 'wiki.discuss.reply', {'content': 'a post'},
+             args=[d.slug, t.id])
+
+        # Only ONE email was sent. As expected.
+        eq_(1, len(mail.outbox))
+        p = Post.objects.all().order_by('-id')[0]
+        attrs_eq(mail.outbox[0], to=['user47963@nowhere'],
+                 subject='Reply to: Sticky Thread')
+        starts_with(mail.outbox[0].body, REPLY_EMAIL % p.id)
+
+    @mock.patch.object(Site.objects, 'get_current')
+    def test_watch_other_locale_then_new_thread(self, get_current):
+        """Watching a different locale and createing a thread does not
+        notify."""
+        get_current.return_value.domain = 'testserver'
+
+        d = Document.objects.filter(locale='en-US')[0]
+        # Log in as pcraciunoiu.
+        self.client.login(username='pcraciunoiu', password='testpass')
+        post(self.client, 'wiki.discuss.watch_locale', {'watch': 'yes'},
+             locale='ja')
+
+        # Create new thread as jsocol for document d.
+        self.client.login(username='jsocol', password='testpass')
+        post(self.client, 'wiki.discuss.new_thread',
+             {'title': 'a title', 'content': 'a post'}, args=[d.slug])
+
+        # Email was not sent.
+        eq_(0, len(mail.outbox))
+
+    @mock.patch.object(Site.objects, 'get_current')
+    def test_watch_locale_then_new_thread(self, get_current):
+        """Watching locale and create a thread."""
+        get_current.return_value.domain = 'testserver'
+
+        d = Document.objects.filter(locale='en-US')[0]
+        # Log in as pcraciunoiu.
+        self.client.login(username='pcraciunoiu', password='testpass')
+        post(self.client, 'wiki.discuss.watch_locale', {'watch': 'yes'})
+
+        # Create new thread as jsocol for document d.
+        self.client.login(username='jsocol', password='testpass')
+        post(self.client, 'wiki.discuss.new_thread',
+             {'title': 'a title', 'content': 'a post'}, args=[d.slug])
+
+        # Email was sent as expected.
+        t = Thread.objects.all().order_by('-id')[0]
+        attrs_eq(mail.outbox[0], to=['user47963@nowhere'],
+                 subject=u'New thread in an article title: a title')
+        starts_with(mail.outbox[0].body, NEW_THREAD_EMAIL % t.id)

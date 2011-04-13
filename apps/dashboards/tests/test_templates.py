@@ -1,6 +1,12 @@
+from datetime import datetime, timedelta
+
 from nose.tools import eq_
 from pyquery import PyQuery as pq
 
+from django.contrib.auth.models import User
+
+from announcements.models import Announcement
+from forums.models import Post
 from sumo.tests import TestCase
 from sumo.urlresolvers import reverse
 from wiki.models import MAJOR_SIGNIFICANCE, MEDIUM_SIGNIFICANCE
@@ -80,3 +86,56 @@ class LocalizationDashTests(TestCase):
                                            args=['untranslated'],
                                            locale='de'))
         self.assertContains(response, untranslated.document.title)
+
+
+class ContributorForumDashTests(TestCase):
+    fixtures = ['users.json', 'posts.json', 'forums_permissions.json']
+
+    def setUp(self):
+        super(ContributorForumDashTests, self).setUp()
+        self.client.login(username='jsocol', password='testpass')
+
+    def test_no_activity(self):
+        """Test the page with no activity."""
+        response = self.client.get(reverse('dashboards.review'), follow=True)
+        eq_(200, response.status_code)
+        doc = pq(response.content)
+        eq_('No recent activity.', doc('#forums-dashboard p').text())
+
+    def test_with_activity(self):
+        """Test the page with some activity."""
+        # Add a reply
+        post = Post(thread_id=4, content='lorem ipsum', author_id=118577)
+        post.save()
+        # Verify activity on the page
+        response = self.client.get(reverse('dashboards.review'), follow=True)
+        eq_(200, response.status_code)
+        doc = pq(response.content)
+        eq_(1, len(doc('ol.actions li')))
+
+
+class AnnouncementForumDashTests(TestCase):
+    fixtures = ['users.json']
+    content = "*crackles* Captain's log, stardate 43124.5 We are doomed."
+
+    def setUp(self):
+        super(AnnouncementForumDashTests, self).setUp()
+        self.client.login(username='jsocol', password='testpass')
+        self.creator = User.objects.all()[0]
+
+    def test_active(self):
+        """Active announcement shows."""
+        Announcement.objects.create(
+            creator=self.creator,
+            show_after=datetime.now() - timedelta(days=2),
+            show_until=datetime.now() + timedelta(days=2),
+            content=self.content)
+
+        response = self.client.get(reverse('dashboards.review'), follow=True)
+        self.assertContains(response, 'stardate 43124.5')
+
+    def test_no_announcements(self):
+        """Template renders with no announcements."""
+        response = self.client.get(reverse('dashboards.review'), follow=True)
+        doc = pq(response.content)
+        assert not len(doc('ol.announcements'))

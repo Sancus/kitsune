@@ -1,12 +1,11 @@
 import logging
 
-from django.core.cache import cache
-from django.conf import settings
-from django.contrib.auth.models import User
 from django.db import transaction
 
 from celery.decorators import task
+from multidb.pinning import pin_this_thread, unpin_this_thread
 
+from activity.models import Action
 from questions import ANSWERS_PER_PAGE
 
 
@@ -38,23 +37,6 @@ def update_question_vote_chunk(data, **kwargs):
     transaction.commit_unless_managed()
 
 
-@task
-def cache_top_contributors():
-    """Compute the top contributors and store in cache."""
-    log.info('Computing the top contributors.')
-    sql = '''SELECT u.*, COUNT(*) AS num_solutions
-             FROM auth_user AS u, questions_answer AS a,
-                  questions_question AS q
-             WHERE u.id = a.creator_id AND a.id = q.solution_id AND
-                   a.created >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-             GROUP BY u.id
-             ORDER BY num_solutions DESC
-             LIMIT 10'''
-    users = list(User.objects.raw(sql))
-    cache.set(settings.TOP_CONTRIBUTORS_CACHE_KEY, users,
-              settings.TOP_CONTRIBUTORS_CACHE_TIMEOUT)
-
-
 @task(rate_limit='4/m')
 def update_answer_pages(question):
     log.debug('Recalculating answer page numbers for question %s: %s' %
@@ -65,3 +47,30 @@ def update_answer_pages(question):
         answer.page = i / ANSWERS_PER_PAGE + 1
         answer.save(no_update=True, no_notify=True)
         i += 1
+
+
+@task
+def log_answer(answer):
+    pin_this_thread()
+
+    creator = answer.creator
+    created = answer.created
+    question = answer.question
+    users = [a.creator for a in
+             question.answers.select_related('creator').exclude(
+                creator=creator)]
+    if question.creator != creator:
+        users += [question.creator]
+    users = set(users)  # Remove duplicates.
+
+    if users:
+        action = Action.objects.create(
+            creator=creator,
+            created=created,
+            url=answer.get_absolute_url(),
+            content_object=answer,
+            formatter_cls='questions.formatters.AnswerFormatter')
+        action.users.add(*users)
+
+    transaction.commit_unless_managed()
+    unpin_this_thread()

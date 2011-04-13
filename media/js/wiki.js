@@ -12,11 +12,10 @@
 
         if ($('body').is('.document') || $('body').is('.home')) {  // Document page
             ShowFor.initForTags();
-            ShowFor.updateShowforSelectors();
             new ArticleHelpfulVote(true);
+            initAOABanner();
         } else if ($('body').is('.review')) { // Review pages
             ShowFor.initForTags();
-            ShowFor.updateShowforSelectors();
         }
 
         if ($('body').is('.home')) {
@@ -26,6 +25,7 @@
         if ($('body').is('.edit, .new, .translate')) {
             initArticlePreview();
             initTitleAndSlugCheck();
+            initPreValidation();
         }
 
         Marky.createFullToolbar('.editor-tools', '#id_content');
@@ -177,7 +177,6 @@
                         .find('select.enable-if-js').removeAttr('disabled');
                     document.location.hash = 'preview';
                     ShowFor.initForTags();
-                    ShowFor.updateShowforSelectors();
                     $preview.find('.kbox').kbox();
                     k.initVideo();
                     $btn.removeAttr('disabled');
@@ -254,6 +253,47 @@
                 }
             });
         }
+    }
+
+    // If the Customer Care banner is present, animate it and handle closing.
+    function initAOABanner() {
+        var $banner = $('#banner'),
+    	    cssFrom = { top: -100 },
+    	    cssTo = { top: -10 };
+        if ($banner.length > 0) {
+        	setTimeout(function() {
+        		$banner
+        		    .css({ display: 'block' })
+        		    .css(cssFrom)
+        		    .animate(cssTo, 500)
+                    .find('a.close').click(function(e) {
+                        e.preventDefault();
+        			    $banner.animate(cssFrom, 500, 'swing', function() {
+        				    $banner.css({ display: 'none' });
+        			    });
+        		    });
+        	}, 500);
+    	}
+    }
+
+    // On document edit/translate/new pages, run validation before opening the
+    // submit modal.
+    function initPreValidation() {
+        var $modal = $('#submit-modal'),
+            kbox = $modal.data('kbox');
+        kbox.updateOptions({
+            preOpen: function() {
+                var form = $('#btn-submit').closest('form')[0];
+                if (form.checkValidity && !form.checkValidity()) {
+                    // If form isn't valid, click the modal submit button
+                    // so the validation error is shown. (I couldn't find a
+                    // better way to trigger this.)
+                    $modal.find('input[type="submit"]').click();
+                    return false;
+                }
+                return true;
+            }
+        });
     }
 
     $(document).ready(init);

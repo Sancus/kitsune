@@ -201,6 +201,7 @@ INSTALLED_APPS = (
     ROOT_PACKAGE,
     'authority',
     'timezones',
+    'waffle',
     'access',
     'sumo',
     'search',
@@ -208,7 +209,9 @@ INSTALLED_APPS = (
     'djcelery',
     'cronjobs',
     'notifications',
+    'activity',
     'questions',
+    'adminplus',
     'kadmin',
     'taggit',
     'flagit',
@@ -224,6 +227,7 @@ INSTALLED_APPS = (
     'inproduct',
     'postcrash',
     'landings',
+    'announcements',
 
     # Extra apps for testing.
     'django_nose',
@@ -549,6 +553,7 @@ CELERY_ALWAYS_EAGER = True  # For tests. Set to False for use.
 CELERY_SEND_TASK_ERROR_EMAILS = True
 CELERYD_LOG_LEVEL = logging.INFO
 CELERYD_CONCURRENCY = 4
+CELERY_EAGER_PROPAGATES_EXCEPTIONS = True  # Explode loudly during tests.
 
 # Wiki rebuild settings
 WIKI_REBUILD_TOKEN = 'sumo:wiki:full-rebuild'
@@ -612,3 +617,6 @@ WEBTRENDS_EPOCH = date(2010, 8, 1)  # When WebTrends started gathering stats on
 WEBTRENDS_REALM = 'Webtrends Basic Authentication'
 
 MOBILE_COOKIE = 'msumo'
+
+# Directory of JavaScript test files for django_qunit to run
+QUNIT_TEST_DIRECTORY = os.path.join(MEDIA_ROOT, 'js', 'tests')

@@ -1,0 +1,21 @@
+{# vim: set ts=2 et sts=2 sw=2: #}
+{% extends "base.html" %}
+{% from "dashboards/includes/macros.html" import dashboard_tabs %}
+{% set scripts = ('wiki',) %}
+{% set styles = ('wiki',) %}
+
+{% block content %}
+  <article id="{{ dashboard_id }}" class="main dashboards">
+    <h1>{{ title }}</h1>
+    {% block dashboard_content %}
+
+    {% endblock %}
+  </article>
+{% endblock %}
+
+{% block side_top %}
+  {{ dashboard_tabs(user, active_tab) }}
+{% endblock %}
+
+{% block breadcrumbs %}
+{% endblock %}

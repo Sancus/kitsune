@@ -4,9 +4,11 @@ from django.contrib import admin
 from django.views.i18n import javascript_catalog
 from django.views.decorators.cache import cache_page
 
+from adminplus import AdminSitePlus
 import authority
 
 
+admin.site = AdminSitePlus()
 admin.autodiscover()
 authority.autodiscover()
 
@@ -24,14 +26,15 @@ urlpatterns = patterns('',
     (r'^postcrash', include('postcrash.urls')),
 
     # Kitsune admin (not Django admin).
-    (r'^admin/', include('kadmin.urls')),
+    (r'^admin/', include(admin.site.urls)),
 
     # Javascript translations.
     url(r'^jsi18n/.*$', cache_page(60 * 60 * 24 * 365)(javascript_catalog),
         {'domain': 'javascript', 'packages': ['kitsune']}, name='jsi18n'),
 
-    url(r'^', include('dashboards.urls')),
-    url(r'^', include('landings.urls')),
+    (r'^', include('dashboards.urls')),
+    (r'^', include('landings.urls')),
+    (r'^', include('notifications.urls')),  # Keep short for email wrapping.
 
     # Users
     ('', include('users.urls')),

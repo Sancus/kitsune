@@ -2,15 +2,16 @@ import logging
 import os
 import socket
 import StringIO
-import time
 
 from django.conf import settings
-from django.core.cache import cache, parse_backend_uri
+from django.core.cache import parse_backend_uri
 from django.http import (HttpResponsePermanentRedirect, HttpResponseRedirect,
                          HttpResponse)
 from django.views.decorators.cache import never_cache
 
-import celery.task
+from celery.messaging import establish_connection
+from commonware.decorators import xframe_allow
+import django_qunit.views
 import jingo
 from PIL import Image
 
@@ -50,7 +51,7 @@ def redirect_to(request, url, permanent=True, **kwargs):
 def robots(request):
     """Generate a robots.txt."""
     if not settings.ENGAGE_ROBOTS:
-        template = 'Disallow: /'
+        template = 'User-Agent: *\nDisallow: /'
     else:
         template = jingo.render(request, 'sumo/robots.html')
     return HttpResponse(template, mimetype='text/plain')
@@ -93,7 +94,6 @@ def monitor(request):
         status_summary['memcache'] = False
         log.warning('Memcache is not configured.')
 
-
     # Check Libraries and versions
     libraries_results = []
     status_summary['libraries'] = True
@@ -104,7 +104,6 @@ def monitor(request):
         status_summary['libraries'] = False
         msg = "Failed to create a jpeg image: %s" % e
         libraries_results.append(('PIL+JPEG', False, msg))
-
 
     msg = 'We want read + write.'
     filepaths = (
@@ -128,7 +127,19 @@ def monitor(request):
 
     status_summary['filepaths'] = filepath_status
 
-    # Check Rabbit
+    # Check RabbitMQ.
+    rabbitmq_status = True
+    rabbitmq_result = ''
+    rabbit_conn = establish_connection(connect_timeout=2)
+    try:
+        rabbit_conn.connect()
+        rabbitmq_result = 'Successfully connected to RabbitMQ.'
+    except socket.error:
+        rabbitmq_result = 'There was an error connecting to RabbitMQ!'
+        rabbitmq_status = False
+    status_summary['rabbitmq'] = rabbitmq_status
+
+    # Check Celery.
     # start = time.time()
     # pong = celery.task.ping()
     # rabbit_results = r = {'duration': time.time() - start}
@@ -141,5 +152,15 @@ def monitor(request):
                         {'memcache_results': memcache_results,
                          'libraries_results': libraries_results,
                          'filepath_results': filepath_results,
+                         'rabbitmq_result': rabbitmq_result,
                          'status_summary': status_summary},
                          status=status)
+
+
+# Allows another site to embed the QUnit suite
+# in an iframe (for CI).
+@xframe_allow
+def kitsune_qunit(request, path):
+    """View that hosts QUnit tests."""
+    ctx = django_qunit.views.get_suite_context(request, path)
+    return jingo.render(request, 'tests/qunit.html', ctx)

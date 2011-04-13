@@ -15,7 +15,6 @@ from django.utils.http import int_to_base36
 import mock
 from nose.tools import eq_
 from pyquery import PyQuery as pq
-from test_utils import RequestFactory
 
 from sumo.urlresolvers import reverse
 from sumo.helpers import urlparams
@@ -23,7 +22,6 @@ from sumo.tests import post
 from users import ERROR_SEND_EMAIL
 from users.models import Profile, RegistrationProfile, RegistrationManager
 from users.tests import TestCaseBase
-from users.views import _clean_next_url
 
 
 class LoginTests(TestCaseBase):
@@ -86,18 +84,7 @@ class LoginTests(TestCaseBase):
         eq_(302, response.status_code)
         eq_('http://testserver' + next, response['location'])
 
-    @mock.patch_object(Site.objects, 'get_current')
-    def test_clean_url(self, get_current):
-        '''Verify that protocol and domain get removed.'''
-        get_current.return_value.domain = 'su.mo.com'
-        r = RequestFactory().post('/users/login',
-                                  {'next': 'https://su.mo.com/kb/new?f=b'})
-        eq_('/kb/new?f=b', _clean_next_url(r))
-        r = RequestFactory().post('/users/login',
-                                  {'next': 'http://su.mo.com/kb/new'})
-        eq_('/kb/new', _clean_next_url(r))
-
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_login_invalid_next_parameter(self, get_current):
         '''Test with an invalid ?next=http://example.com parameter.'''
         get_current.return_value.domain = 'testserver.com'
@@ -167,7 +154,7 @@ class PasswordResetTests(TestCaseBase):
         eq_('http://testserver/en-US/users/pwresetsent', r['location'])
         eq_(0, len(mail.outbox))
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_success(self, get_current):
         get_current.return_value.domain = 'testserver.com'
         r = self.client.post(reverse('users.pw_reset'),
@@ -178,7 +165,7 @@ class PasswordResetTests(TestCaseBase):
         assert mail.outbox[0].subject.find('Password reset') == 0
         assert mail.outbox[0].body.find('pwreset/%s' % self.uidb36) > 0
 
-    @mock.patch_object(PasswordResetForm, 'save')
+    @mock.patch.object(PasswordResetForm, 'save')
     def test_smtp_error(self, pwform_save):
         def raise_smtp(*a, **kw):
             raise SMTPRecipientsRefused(recipients=[self.user.email])
@@ -243,7 +230,8 @@ class EditProfileTests(TestCaseBase):
                 'irc_handle': 'johndoe',
                 'timezone': 'America/New_York',
                 'country': 'US',
-                'city': 'Disney World'}
+                'city': 'Disney World',
+                'locale': 'en-US'}
         r = self.client.post(url, data)
         eq_(302, r.status_code)
         profile = User.objects.get(username='rrosario').get_profile()
@@ -340,7 +328,7 @@ class ViewProfileTests(TestCaseBase):
         r = self.client.get(reverse('users.profile', args=[47963]))
         eq_(200, r.status_code)
         doc = pq(r.content)
-        eq_('Edit my profile', doc('#doc-tabs li a').eq(1).text())
+        eq_('Edit my profile', doc('#doc-tabs li:last').text())
         self.client.logout()
 
 
@@ -386,7 +374,7 @@ class PasswordChangeTests(TestCaseBase):
 
 
 class ResendConfirmationTests(TestCaseBase):
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_resend_confirmation(self, get_current):
         get_current.return_value.domain = 'testserver.com'
 
@@ -400,8 +388,8 @@ class ResendConfirmationTests(TestCaseBase):
         eq_(2, len(mail.outbox))
         assert mail.outbox[1].subject.find('Please confirm your email') == 0
 
-    @mock.patch_object(RegistrationManager, 'send_confirmation_email')
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(RegistrationManager, 'send_confirmation_email')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_smtp_error(self, get_current, send_confirmation_email):
         get_current.return_value.domain = 'testserver.com'
 

@@ -29,7 +29,6 @@ class RedirectToTestcase(TestCase):
             resp['location'])
 
 
-
 class RobotsTestCase(TestCase):
     # Use the hard-coded URL because it's well-known.
     old_setting = settings.ENGAGE_ROBOTS
@@ -40,11 +39,11 @@ class RobotsTestCase(TestCase):
     def test_disengaged(self):
         settings.ENGAGE_ROBOTS = False
         response = self.client.get('/robots.txt')
-        eq_('Disallow: /', response.content)
+        eq_('User-Agent: *\nDisallow: /', response.content)
         eq_('text/plain', response['content-type'])
 
     def test_engaged(self):
         settings.ENGAGE_ROBOTS = True
         response = self.client.get('/robots.txt')
         eq_('text/plain', response['content-type'])
-        assert len(response.content) > 11
+        assert len(response.content) > len('User-agent: *\nDisallow: /')

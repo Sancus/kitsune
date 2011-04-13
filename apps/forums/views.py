@@ -24,8 +24,11 @@ log = logging.getLogger('k.forums')
 
 def forums(request):
     """View all the forums."""
-    forums_ = [f for f in Forum.objects.all() if
-               f.allows_viewing_by(request.user)]
+    qs = Forum.objects.select_related('last_post', 'last_post__author')
+    qs = qs.extra(select={'thread_count': 'SELECT COUNT(*) FROM forums_thread '
+                                          'WHERE forums_thread.forum_id = '
+                                          'forums_forum.id'})
+    forums_ = [f for f in qs if f.allows_viewing_by(request.user)]
     return jingo.render(request, 'forums/forums.html',
                        {'forums': paginate(request, forums_)})
 
@@ -65,8 +68,11 @@ def threads(request, forum_slug):
     desc_toggle = 0 if desc else 1
 
     threads_ = sort_threads(forum.thread_set, sort, desc)
+    count = threads_.count()
+    threads_ = threads_.select_related('creator', 'last_post',
+                                       'last_post__author')
     threads_ = paginate(request, threads_,
-                        per_page=constants.THREADS_PER_PAGE)
+                        per_page=constants.THREADS_PER_PAGE, count=count)
 
     feed_urls = ((reverse('forums.threads.feed', args=[forum_slug]),
                   ThreadsFeed().title(forum)),)
@@ -88,8 +94,13 @@ def posts(request, forum_slug, thread_id, form=None, reply_preview=None):
 
     thread = get_object_or_404(Thread, pk=thread_id, forum=forum)
 
-    posts_ = paginate(request, thread.post_set.all(),
-                      constants.POSTS_PER_PAGE)
+    posts_ = thread.post_set.all()
+    count = posts_.count()
+    posts_ = posts_.select_related('author', 'updated_by')
+    posts_ = posts_.extra(
+        select={'author_post_count': 'SELECT COUNT(*) FROM forums_post WHERE '
+                                     'forums_post.author_id = auth_user.id'})
+    posts_ = paginate(request, posts_, constants.POSTS_PER_PAGE, count=count)
 
     if not form:
         form = ReplyForm()

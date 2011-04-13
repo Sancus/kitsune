@@ -234,6 +234,7 @@ class EventUnionTests(TestCase):
         class OneEvent(object):
             def _users_watching(self):
                 return [(user(email='HE@LLO.COM'), watch())]
+
         class AnotherEvent(object):
             def _users_watching(self):
                 return [(user(email='he@llo.com'), watch()),
@@ -246,9 +247,10 @@ class EventUnionTests(TestCase):
         eq_(2, len(addresses))
         eq_('he@llo.com', addresses[0].lower())
 
-    @mock.patch_object(SimpleEvent, '_mails')
+    @mock.patch.object(SimpleEvent, '_mails')
     def test_fire(self, _mails):
         """Assert firing the union gets the mails from the first event."""
+        _mails.return_value = []
         watch(event_type=TYPE, email='he@llo.com').save()
         EventUnion(SimpleEvent(), AnotherEvent()).fire()
         assert _mails.called
@@ -341,7 +343,7 @@ class CascadingDeleteTests(ModelsTestCase):
 class MailTests(TestCase):
     """Tests for mail-sending and templating"""
 
-    @mock.patch_object(settings._wrapped, 'CONFIRM_ANONYMOUS_WATCHES', False)
+    @mock.patch.object(settings._wrapped, 'CONFIRM_ANONYMOUS_WATCHES', False)
     def test_fire(self):
         """Assert that fire() runs and that generated mails get sent."""
         SimpleEvent.notify('hi@there.com').activate().save()
@@ -372,7 +374,7 @@ class MailTests(TestCase):
         eq_('Subject!', second_mail.subject)
         eq_('Body!', second_mail.body)
 
-    @mock.patch_object(settings._wrapped, 'CONFIRM_ANONYMOUS_WATCHES', False)
+    @mock.patch.object(settings._wrapped, 'CONFIRM_ANONYMOUS_WATCHES', False)
     def test_exclude(self):
         """Assert the `exclude` arg to fire() excludes the given user."""
         SimpleEvent.notify('du@de.com').activate().save()

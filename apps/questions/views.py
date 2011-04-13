@@ -34,7 +34,6 @@ from questions.forms import (NewQuestionForm, EditQuestionForm, AnswerForm,
                              WatchQuestionForm, FREQUENCY_CHOICES)
 from questions.models import (Question, Answer, QuestionVote, AnswerVote,
                               CONFIRMED, UNCONFIRMED)
-from questions.tasks import cache_top_contributors
 from questions.question_config import products
 from search.clients import WikiClient, QuestionsClient, SearchError
 from search.utils import locale_or_default, sphinx_locale
@@ -114,13 +113,14 @@ def questions(request):
 
 
 def answers(request, question_id, form=None, watch_form=None,
-            answer_preview=None):
+            answer_preview=None, **extra_kwargs):
     """View the answers to a question."""
     ans_ = _answers_data(request, question_id, form, watch_form,
                          answer_preview)
     if request.user.is_authenticated():
         ans_['images'] = ans_['question'].images.filter(creator=request.user)
-    return jingo.render(request, 'questions/answers.html', ans_)
+    extra_kwargs.update(ans_)
+    return jingo.render(request, 'questions/answers.html', extra_kwargs)
 
 
 @mobile_template('questions/{mobile/}new_question.html')
@@ -630,6 +630,7 @@ def edit_answer(request, question_id, answer_id):
 @require_POST
 def watch_question(request, question_id):
     """Start watching a question for replies or solution."""
+
     question = get_object_or_404(Question, pk=question_id)
     form = WatchQuestionForm(request.user, request.POST)
 
@@ -644,16 +645,15 @@ def watch_question(request, question_id):
             else:
                 QuestionSolvedEvent.notify(user_or_email, question)
         except ActivationRequestFailed:
-            msg = _('Could not send message to that email address.')
+            msg = _('Could not send a message to that email address.')
 
     # Respond to ajax request
     if request.is_ajax():
         if form.is_valid():
-            if not msg:
-                msg = (_('You will be notified of updates by email.') if
-                       request.user.is_authenticated() else
-                       _('You should receive an email shortly '
-                         'to confirm your subscription.'))
+            msg = msg or (_('You will be notified of updates by email.') if
+                              request.user.is_authenticated() else
+                          _('You should receive an email shortly '
+                            'to confirm your subscription.'))
             return HttpResponse(json.dumps({'message': msg}))
 
         if request.POST.get('from_vote'):
@@ -666,11 +666,10 @@ def watch_question(request, question_id):
         return HttpResponse(json.dumps({'html': html}))
 
     # Respond to normal request
-    # TODO: show failure here if email fails to send.
-    if form.is_valid():
+    if form.is_valid() and not msg:
         return HttpResponseRedirect(question.get_absolute_url())
 
-    return answers(request, question.id, watch_form=form)
+    return answers(request, question.id, watch_form=form, message=msg)
 
 
 @require_POST
@@ -841,14 +840,10 @@ def _add_tag(request, question_id):
 
 def _get_top_contributors():
     """Retrieves the top contributors from cache, if available.
-    Otherwise it creates a task for computing and caching them.
 
     These are the users with the most solutions in the last week.
     """
-    users = cache.get(settings.TOP_CONTRIBUTORS_CACHE_KEY)
-    if not users:
-        cache_top_contributors.delay()
-    return users
+    return cache.get(settings.TOP_CONTRIBUTORS_CACHE_KEY)
 
 
 # Initialize a WatchQuestionForm

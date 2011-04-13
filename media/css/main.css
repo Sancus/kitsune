@@ -166,6 +166,8 @@ article.main > h1 {
     color: #333;
     float: left;
     padding: 20px 0 20px 60px;
+    position: relative;
+    z-index: 2;
 }
 
 #support-search {
@@ -579,6 +581,15 @@ article.main div.submit {
     padding: 10px 0 0;
 }
 
+/* Notification watch buttons */
+#doc-watch {
+    margin: 20px 0 0 20px;
+}
+
+#doc-watch input {
+    margin: 0 0 10px;
+}
+
 /*----------------------------------
     Markup editor styles
 ----------------------------------*/
@@ -863,7 +874,7 @@ div.submit-or-cancel {
 }
 
 div.submit-or-cancel input[type="submit"] {
-    margin: 0 0 0 1em;
+    margin: 0 1em 0 0;
 }
 
 /* Image markup styling */

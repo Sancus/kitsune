@@ -16,9 +16,9 @@ from questions.events import QuestionReplyEvent, QuestionSolvedEvent
 from questions.models import Question, Answer, QuestionVote
 from questions.tests import TestCaseBase, TaggingTestCaseBase, tags_eq
 from questions.views import UNAPPROVED_TAG, NO_TAG
-from questions.tasks import cache_top_contributors
+from questions.cron import cache_top_contributors
 from sumo.helpers import urlparams
-from sumo.tests import get, post, attrs_eq
+from sumo.tests import get, post, attrs_eq, emailmessage_raise_smtp
 from sumo.urlresolvers import reverse
 from upload.models import ImageAttachment
 from users.models import RegistrationProfile
@@ -479,7 +479,7 @@ class AnswersTemplateTestCase(TestCaseBase):
                        args=[self.question.id])
         eq_(405, response.status_code)
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_replies(self, get_current):
         """Watch a question for replies."""
         get_current.return_value.domain = 'testserver'
@@ -501,7 +501,20 @@ class AnswersTemplateTestCase(TestCaseBase):
         get(self.client, 'questions.activate_watch', args=[w.id, w.secret])
         assert Watch.objects.get().is_active
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(mail.EmailMessage, 'send')
+    def test_watch_replies_smtp_error(self, emailmessage_send):
+        """Watch a question for replies and fail to send email."""
+        emailmessage_send.side_effect = emailmessage_raise_smtp
+        self.client.logout()
+
+        r = post(self.client, 'questions.watch',
+                 {'email': 'some@bo.dy', 'event_type': 'reply'},
+                 args=[self.question.id])
+        assert not QuestionReplyEvent.is_notifying(
+            'some@bo.dy', self.question), 'Watch was created'
+        self.assertContains(r, 'Could not send a message to that email')
+
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_replies_wrong_secret(self, get_current):
         """Watch a question for replies."""
         # This also covers test_watch_solution_wrong_secret.
@@ -528,7 +541,7 @@ class AnswersTemplateTestCase(TestCaseBase):
         assert QuestionReplyEvent.is_notifying(user, self.question), (
                'Watch was not created')
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_watch_solution(self, get_current):
         """Watch a question for solution."""
         self.client.logout()
@@ -1080,7 +1093,7 @@ class AAQTemplateTestCase(TestCaseBase):
         eq_(400, response.status_code)
         assert 'Request type not recognized' in response.content
 
-    @mock.patch_object(Site.objects, 'get_current')
+    @mock.patch.object(Site.objects, 'get_current')
     def test_register_through_aaq(self, get_current):
         """Registering through AAQ form sends confirmation email."""
         get_current.return_value.domain = 'testserver'

@@ -6,7 +6,6 @@ from wikimarkup.parser import Parser
 
 from gallery.models import Image
 from sumo.urlresolvers import reverse
-from wiki.models import Document
 
 
 ALLOWED_ATTRIBUTES = {
@@ -26,6 +25,7 @@ ALLOWED_ATTRIBUTES = {
               'data-width', 'data-height'],
     'source': ['src', 'type'],
 }
+ALLOWED_STYLES = ['vertical-align']
 IMAGE_PARAMS = ['alt', 'align', 'caption', 'valign', 'frame', 'page', 'link',
                 'width', 'height']
 IMAGE_PARAM_VALUES = {
@@ -95,6 +95,11 @@ def _get_wiki_link(title, locale):
     found is False if the document does not exist.
 
     """
+    # Prevent circular import. sumo is conceptually a utils apps and shouldn't
+    # have import-time (or really, any, but that's not going to happen)
+    # dependencies on client apps.
+    from wiki.models import Document
+
     d = get_object_fallback(Document, locale=locale, title=title,
                             is_template=False)
     if d:
@@ -172,7 +177,7 @@ class WikiParser(Parser):
         self.registerInternalLinkHook('Image', self._hook_image_tag)
 
     def parse(self, text, show_toc=None, tags=None, attributes=None,
-              locale=settings.WIKI_DEFAULT_LANGUAGE):
+              styles=None, locale=settings.WIKI_DEFAULT_LANGUAGE):
         """Given wiki markup, return HTML.
 
         Pass a locale to get all the hooks to look up Documents or Media
@@ -185,7 +190,8 @@ class WikiParser(Parser):
 
         parser_kwargs = {'tags': tags} if tags else {}
         return super(WikiParser, self).parse(text, show_toc=show_toc,
-            attributes=attributes or ALLOWED_ATTRIBUTES, **parser_kwargs)
+            attributes=attributes or ALLOWED_ATTRIBUTES,
+            styles=styles or ALLOWED_STYLES, **parser_kwargs)
 
     def _hook_internal_link(self, parser, space, name):
         """Parses text and returns internal link."""

@@ -1,12 +1,17 @@
-from django.core import paginator
+import urlparse
+
+from django.conf import settings
+from django.contrib.sites.models import Site
 from django.db import models
 from django.db.models.signals import pre_delete
 from django.utils.http import urlencode
 
+from sumo import paginator
 
-def paginate(request, queryset, per_page=20):
+
+def paginate(request, queryset, per_page=20, count=None):
     """Get a Paginator, abstracting some common paging actions."""
-    p = paginator.Paginator(queryset, per_page)
+    p = paginator.Paginator(queryset, per_page, count=count)
 
     # Get the page from the request, make sure it's an int.
     try:
@@ -79,3 +84,36 @@ def auto_delete_files(cls):
     """
     pre_delete.connect(delete_files_for_obj, sender=cls)
     return cls
+
+
+def get_next_url(request):
+    """Given a request object, looks for the best possible next URL.
+
+    Useful for e.g. redirects back to original page after a POST request.
+
+    """
+    if 'next' in request.POST:
+        url = request.POST.get('next')
+    elif 'next' in request.GET:
+        url = request.GET.get('next')
+    else:
+        url = request.META.get('HTTP_REFERER')
+
+    if url:
+        parsed_url = urlparse.urlparse(url)
+        # Don't redirect outside of SUMO.
+        # Don't include protocol+domain, so if we are https we stay that way.
+        if parsed_url.scheme:
+            site_domain = Site.objects.get_current().domain
+            url_domain = parsed_url.netloc
+            if site_domain != url_domain:
+                url = None
+            else:
+                url = u'?'.join([getattr(parsed_url, x) for x in
+                                ('path', 'query') if getattr(parsed_url, x)])
+
+        # Don't redirect right back to login or logout page
+        if parsed_url.path in [settings.LOGIN_URL, settings.LOGOUT_URL]:
+            url = None
+
+    return url

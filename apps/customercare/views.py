@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.utils.datastructures import SortedDict
 
 from babel.numbers import format_number
-from bleach import Bleach
+import bleach
 import jingo
 from tower import ugettext as _, ugettext_lazy as _lazy
 import tweepy
@@ -22,8 +22,6 @@ import twitter
 
 
 log = logging.getLogger('k.customercare')
-
-bleach = Bleach()
 
 MAX_TWEETS = 20
 FILTERS = SortedDict([('recent', _lazy('Most Recent')),
@@ -64,7 +62,7 @@ def _get_tweets(locale=settings.LANGUAGE_CODE, limit=MAX_TWEETS, max_id=None,
 
     Args:
         limit: the maximum number of tweets returned
-        max_id: return tweets with the status ids less than max_id
+        max_id: Return tweets with tweet_id less than this.
         reply_to: Return only tweets that are replies to the given Tweet. If
             None, return only top-level (non-reply) tweets.
         filter: One of the keys from FILTERS
@@ -123,7 +121,7 @@ def landing(request):
                 'perc': act[3] * 100,
             }))
     else:
-        activity_stats = None
+        activity_stats = []
 
     contributors = cache.get(settings.CC_TOP_CONTRIB_CACHE_KEY)
     if contributors:
@@ -144,7 +142,7 @@ def landing(request):
                 'avatar': contributors['avatars'].get(contrib[3]),
             })
     else:
-        contributor_stats = None
+        contributor_stats = []
 
     return jingo.render(request, 'customercare/landing.html', {
         'activity_stats': activity_stats,

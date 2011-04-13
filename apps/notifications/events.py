@@ -1,6 +1,5 @@
 import random
 from smtplib import SMTPException
-from string import letters
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -11,7 +10,7 @@ from django.db.models import Q
 from celery.decorators import task
 
 from notifications.models import Watch, WatchFilter, EmailUser, multi_raw
-from notifications.utils import merge, hash_to_unsigned
+from notifications.utils import collate, hash_to_unsigned
 
 
 class ActivationRequestFailed(Exception):
@@ -75,7 +74,9 @@ class Event(object):
     Fire an Event (SomeEvent.fire()) from the code that causes the interesting
     event to occur. Fire it any time the event *might* have occurred. The Event
     will determine whether conditions are right to actually send notifications;
-    don't succumb to the temptation to do these tests outside the Event.
+    don't succumb to the temptation to do these tests outside the Event,
+    because you'll end up repeating yourself if the event is ever fired from
+    more than one place.
 
     Event subclasses can optionally represent a more limited scope of interest
     by populating the Watch.content_type field and/or adding related
@@ -329,7 +330,12 @@ class Event(object):
                     ContentType.objects.get_for_model(cls.content_type)
             create_kwargs['email' if isinstance(user_or_email_, basestring)
                           else 'user'] = user_or_email_
-            secret = ''.join(random.choice(letters) for x in xrange(10))
+            # Letters that can't be mistaken for other letters or numbers in
+            # most fonts, in case people try to type these:
+            distinguishable_letters = \
+                'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRTUVWXYZ'
+            secret = ''.join(random.choice(distinguishable_letters)
+                             for x in xrange(10))
             # Registered users don't need to confirm, but anonymous users do.
             is_active = ('user' in create_kwargs or
                           not settings.CONFIRM_ANONYMOUS_WATCHES)
@@ -385,6 +391,9 @@ class Event(object):
             where the first element is the user to send to and the second is
             the watch that indicated the user's interest in this event
 
+        notifications.utils.emails_with_users_and_watches() can come in handy
+        for generating mails from Django templates.
+
         """
         # Did this instead of mail() because a common case might be sending the
         # same mail to many users. mail() would make it difficult to avoid
@@ -428,8 +437,12 @@ class Event(object):
         raise NotImplementedError
 
     @classmethod
-    def watch_description(cls, watch):
-        """Return a description of the watch which can be used in emails."""
+    def description_of_watch(cls, watch):
+        """Return a description of the Watch which can be used in emails.
+
+        For example, "changes to English articles"
+
+        """
         raise NotImplementedError
 
 
@@ -469,10 +482,10 @@ class EventUnion(Event):
 
     def _users_watching(self, **kwargs):
         # Get a sorted iterable of user-watch pairs:
-        users_and_watches = merge(*[e._users_watching(**kwargs)
-                                    for e in self.events],
-                                  key=lambda (user, watch): user.email.lower(),
-                                  reverse=True)
+        users_and_watches = collate(
+            *[e._users_watching(**kwargs) for e in self.events],
+            key=lambda (user, watch): user.email.lower(),
+            reverse=True)
 
         # Pick the best User out of each cluster of identical email addresses:
         return _unique_by_email(users_and_watches)

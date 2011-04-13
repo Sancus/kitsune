@@ -1,7 +1,9 @@
 import json
 
 from django.conf import settings
+from django.contrib.sites.models import Site
 
+import mock
 from nose.tools import eq_
 from pyquery import PyQuery as pq
 
@@ -140,8 +142,10 @@ class DocumentEditingTests(TestCase):
         eq_(2, d.firefox_versions.count())
         eq_(1, d.operating_systems.count())
 
-    def test_invalid_slug(self):
+    @mock.patch.object(Site.objects, 'get_current')
+    def test_invalid_slug(self, get_current):
         """Slugs cannot contain /."""
+        get_current.return_value.domain = 'testserver'
         client = LocalizingClient()
         client.login(username='admin', password='testpass')
         data = new_document_data()
@@ -161,9 +165,14 @@ class DocumentEditingTests(TestCase):
         self.client.login(username='admin', password='testpass')
         en_r = revision(save=True)
         fr_d = document(parent=en_r.document, locale='fr', save=True)
-        fr_r = revision(document=fr_d, based_on=en_r, save=True)
+        revision(document=fr_d, based_on=en_r, is_approved=True, save=True)
+        fr_r = revision(document=fr_d, based_on=en_r, keywords="oui",
+                        summary="lipsum", save=True)
         url = reverse('wiki.new_revision_based_on',
                       locale='fr', args=(fr_d.slug, fr_r.pk,))
         response = self.client.get(url)
-        input = pq(response.content)('#id_based_on')[0]
+        doc = pq(response.content)
+        input = doc('#id_based_on')[0]
         eq_(int(input.value), en_r.pk)
+        eq_(doc('#id_keywords')[0].attrib['value'], 'oui')
+        eq_(doc('#id_summary').text(), 'lipsum')

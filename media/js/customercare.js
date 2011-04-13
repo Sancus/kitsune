@@ -185,6 +185,7 @@
                 var pos = this.$textarea.val().length - 8; // == ' #fxhelp'.length
                 this.$textarea.get(0).setSelectionRange(pos, pos);
                 this.$textarea.focus();
+                this.$error_msg.text('').hide();
             };
             this.close = function() {
                 this.kbox.close();
@@ -423,7 +424,7 @@
             }
             $('#scroll-busy').show();
 
-            var max_id = $('#tweets li:last').attr('data-tweet-id');
+            var max_id = $('#tweets > li:last').attr('data-tweet-id');
             if (!max_id) return;
 
             $.get(

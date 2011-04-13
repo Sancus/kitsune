@@ -20,7 +20,7 @@ from tower import ugettext as _
 from access.decorators import permission_required, login_required
 from sumo.helpers import urlparams
 from sumo.urlresolvers import reverse
-from sumo.utils import paginate, smart_int
+from sumo.utils import paginate, smart_int, get_next_url
 from wiki import DOCUMENTS_PER_PAGE
 from wiki.events import (EditDocumentEvent, ReviewableRevisionInLocaleEvent,
                          ApproveRevisionInLocaleEvent)
@@ -143,7 +143,8 @@ def document(request, document_slug, template=None):
 
     data = {'document': doc, 'redirected_from': redirected_from,
             'related': related, 'contributors': contributors,
-            'fallback_reason': fallback_reason}
+            'fallback_reason': fallback_reason,
+            'is_aoa_referral': request.GET.get('ref') == 'aoa'}
     data.update(SHOWFOR_DATA)
     return jingo.render(request, template, data)
 
@@ -438,10 +439,13 @@ def translate(request, document_slug, revision_id=None):
     if user_has_rev_perm:
         initial = {'based_on': based_on_rev.id, 'comment': ''}
         if revision_id:
-            initial.update(
-                content=Revision.objects.get(pk=revision_id).content)
+            r = Revision.objects.get(pk=revision_id)
+            initial.update(content=r.content, summary=r.summary,
+                           keywords=r.keywords)
         elif not doc:
-            initial.update(content=based_on_rev.content)
+            initial.update(content=based_on_rev.content,
+                           summary=based_on_rev.summary,
+                           keywords=based_on_rev.keywords)
         instance = doc and get_current_or_latest_revision(doc)
         rev_form = RevisionForm(instance=instance, initial=initial)
 
@@ -524,7 +528,7 @@ def watch_locale(request):
     ReviewableRevisionInLocaleEvent.notify(request.user, locale=request.locale)
     # This redirect is pretty bad, because you might also have been on the
     # Contributor Dashboard:
-    return HttpResponseRedirect(reverse('dashboards.localization'))
+    return HttpResponseRedirect(_get_next_url_fallback_localization(request))
 
 
 @require_POST
@@ -533,7 +537,7 @@ def unwatch_locale(request):
     """Stop watching a locale for revisions ready for review."""
     ReviewableRevisionInLocaleEvent.stop_notifying(request.user,
                                                    locale=request.locale)
-    return HttpResponseRedirect(reverse('dashboards.localization'))
+    return HttpResponseRedirect(_get_next_url_fallback_localization(request))
 
 
 @require_POST
@@ -545,7 +549,7 @@ def watch_approved(request):
         raise Http404
 
     ApproveRevisionInLocaleEvent.notify(request.user, locale=locale)
-    return HttpResponseRedirect(reverse('dashboards.localization'))
+    return HttpResponseRedirect(_get_next_url_fallback_localization(request))
 
 
 @require_POST
@@ -557,7 +561,7 @@ def unwatch_approved(request):
         raise Http404
 
     ApproveRevisionInLocaleEvent.stop_notifying(request.user, locale=locale)
-    return HttpResponseRedirect(reverse('dashboards.localization'))
+    return HttpResponseRedirect(_get_next_url_fallback_localization(request))
 
 
 @require_GET
@@ -677,3 +681,7 @@ def _maybe_schedule_rebuild(form):
     """Try to schedule a KB rebuild if a title or slug has changed."""
     if 'title' in form.changed_data or 'slug' in form.changed_data:
         schedule_rebuild_kb()
+
+
+def _get_next_url_fallback_localization(request):
+    return get_next_url(request) or reverse('dashboards.localization')
