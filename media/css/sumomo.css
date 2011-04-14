@@ -1,1 +1,8 @@
-
+#firefox-help a {
+    background: transparent url(../img/tb-logo.png) no-repeat left center;
+    color: #333;
+    float: left;
+    padding: 20px 0 20px 60px;
+    position: relative;
+    z-index: 2;
+}
