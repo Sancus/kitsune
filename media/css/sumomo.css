@@ -1,8 +1,15 @@
 #firefox-help a {
-    background: transparent url(../img/tb-logo.png) no-repeat left center;
-    color: #333;
-    float: left;
-    padding: 20px 0 20px 60px;
-    position: relative;
-    z-index: 2;
+    background: transparent url(../img/tb-logo.png) no-repeat left center  !important;
+}
+.moz-header-slim #header h1 a,
+.moz-header-slim #header h1 a:link,
+.moz-header-slim #header h1 a:visited {
+    width: 123px !important;
+    background: url(../img/tb-wordmark-slim.png) 15px 4px no-repeat !important;
+}
+
+.moz-header-slim #header h1 a:hover,
+.moz-header-slim #header h1 a:active {
+    background: -moz-radial-gradient(center 45deg, ellipse closest-side, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 100%),
+        url(../img/tb-wordmark-slim.png) 15px 4px no-repeat !important;
 }
