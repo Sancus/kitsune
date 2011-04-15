@@ -13,3 +13,18 @@
     background: -moz-radial-gradient(center 45deg, ellipse closest-side, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 100%),
         url(../img/tb-wordmark-slim.png) 15px 4px no-repeat !important;
 }
+#footer-logo a,
+#footer-logo a:link,
+#footer-logo a:visited {
+    background: url("../img/tb-wordmark-slim.png") no-repeat scroll 15px 0 transparent !important;
+    width: 120px !important;
+}
+
+#footer-logo a:hover,
+#footer-logo a:active {
+    background: -moz-radial-gradient(center 45deg,
+                                     ellipse closest-side,
+                                     rgba(255,255,255,0.3) 0%,
+                                     rgba(255,255,255,0) 100%),
+                url(../img/tb-wordmark-slim.png) 15px 0 no-repeat !important;
+}
