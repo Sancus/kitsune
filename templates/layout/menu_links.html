@@ -1,12 +1,46 @@
-{# vim: set ts=2 et sts=2 sw=2: #}
-{% extends "global/menu_links.html" %}
-
-{% block sumo_links %}
-    <li class="current"><a href="{{ url('home') }}">{{ _('Support') }}</a>
+<ul>
+  {% block feature_links %}
+  <li class="first"><a href="http://mozillamessaging.com/thunderbird/features/">{{ _('Features') }}</a>
+  </li>
+  {% endblock %}
+  {% block mobile_links %}
+  <li><a href="http://www.mozilla.com/mobile/">{{ _('Mobile') }}</a></li>
+  {% endblock %}
+  {% block amo_links %}
+    <li class=""><a href="https://addons.mozilla.org/">{{ _('Add-ons') }}</a>
       <ul>
-        <li class="first"><a href="{{ url('home') }}">{{ _('Firefox Support') }}</a></li>
-        <li><a href="{{ url('home.mobile') }}">{{ _('Mobile Support') }}</a></li>
-        <li class="last"><a href="http://www.mozilla.org/support/thunderbird/">{{ _('Thunderbird Support') }}</a></li>
+        <li class="first"><a href="https://addons.mozilla.org/thunderbird/">{{ _('Firefox Add-ons') }}</a></li>
+        <li><a href="https://addons.mozilla.org//thunderbird/featured">{{ _('Featured Add-ons') }}</a></li>
+        <li><a href="https:/addons.mozilla.org/thunderbird/extensions/">{{ _('Extensions') }}</a></li>
+        <li><a href="https://addons.mozilla.org/thunderbird/themes/">{{ _('Themes') }}</a></li>
+       <li><a href="https://addons.mozilla.org/thunderbird/language-tools/">{{ _('Language Support') }}</a></li>
+        <li><a href="https://addons.mozilla.org/thunderbird/collections/">{{ _('Collections') }}</a></li>
+       <li class="last"><a href="https://addons.mozilla.org/thunderbird/developers/">{{ _('Developer Hub') }}</a></li>
       </ul>
     </li>
-{% endblock %}
+  {% endblock %}
+  {% block sumo_links %}
+    <li><a href="http://support.mozillamessaging.com/">{{ _('Support') }}</a>
+      <ul>
+        <li class="first"><a href="http://support.mozilla.com/home/">{{ _('Firefox Support') }}</a></li>
+        <li><a href="http://support.mozilla.com/mobile/">{{ _('Mobile Support') }}</a></li>
+        <li><a href="http://www.mozillazine.org/">{{ _('MozillaZine') }}</a></li>
+	<li class="last"><a href="http://www.mozilla.org/support/thunderbird/">{{ _('Thunderbird Support') }}</a></li>
+      </ul>
+    </li>
+  {% endblock %}
+  {% block about_links %}
+  <li class="last"><a href="http://www.mozilla.com/about/">{{ _('About') }}</a>
+    <ul>
+      <li class="first"><a href="http://www.mozillamessaging.com/about/">{{ _('About Firefox') }}</a></li>
+      <li><a href="http://www.mozilla.com/about/participate/">{{ _('Participate') }}</a></li>
+      <li><a href="http://www.mozilla.com/press/">{{ _('Communications') }}</a></li>
+      <li><a href="http://www.mozilla.com/about/careers.html">{{ _('Careers') }}</a></li>
+      <li><a href="http://www.mozilla.com/about/partnerships.html">{{ _('Partnerships') }}</a></li>
+      <li><a href="http://www.mozilla.com/about/legal.html">{{ _('Legal') }}</a></li>
+      <li><a href="http://www.mozilla.com/about/contact.html">{{ _('Contact Us') }}</a></li>
+      <li class="last"><a href="http://blog.mozilla.com/">{{ _('Blog') }}</a></li>
+    </ul>
+  </li>
+ {% endblock %}
+</ul>
