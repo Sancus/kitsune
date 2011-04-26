@@ -87,18 +87,18 @@
         {% block side_promos %}
           <section id="want-to-get-involved">
             <h1>{{ _('Be <mark>Awesome</mark>')|safe }}</h1>
-	    {% comment %}
+	    {#
             <div class="img">
               <img src="{{ settings.MEDIA_URL }}img/promo.sumo.png" alt="" />
             </div>
-	    {% endcomment %}
+	    #}
             <p>
               {% trans %}Did you know that Firefox Help is powered by volunteer
                 superheroes all around the world?{% endtrans %}
             </p>
             <a href="{{ url('wiki.document', 'superheroes-wanted') }}">{{ _('Grab your cape and join us &raquo;')|safe }}</a>
           </section>
-	  {% comment %}
+	  {#
           {% if not hide_plugin_check %}
             <section id="check-your-plugins">
               <h1>{{ _('Check your <mark>plugins</mark>')|safe }}</h1>
@@ -114,7 +114,7 @@
               <a href="http://www.mozilla.com/plugincheck/">{{ _('Find out more &raquo;')|safe }}</a>
             </section>
           {% endif %}
-	  {% endcomment %}
+	  #}
         {% endblock %}
       </div>
     </div>
