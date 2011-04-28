@@ -103,7 +103,7 @@ class PlusToSpaceMiddleware(object):
     def process_request(self, request):
         p = re.compile(r'\+')
         if p.search(request.path_info):
-            new = p.sub(' ', request.path_info)
+            new = p.sub('-', request.path_info)
             if request.META['QUERY_STRING']:
                 new = u'%s?%s' % (new,
                                   smart_unicode(request.META['QUERY_STRING']))
