@@ -1,15 +1,15 @@
 // WebTrends SmartSource Data Collector Tag
 // Version: 8.6.2     
 // Tag Builder Version: 3.0
-// Created: 3/29/2010 4:04:57 PM
+// Created: 4/28/2011 3:35:57 PM
 function WebTrends(){
    var that=this;
    // begin: user modifiable
-   this.dcsid="dcskot6d000000w0qxqho15rf_7r6o";
+   this.dcsid="dcsjd66bq10000k73ngwoin8k_7d1l";
    this.rate=50;
    this.domain="statse.webtrendslive.com";
    this.timezone=-8;
-   this.fpcdom="mozilla.com";
+   this.fpcdom=".mozillamessaging.com";
    this.onsitedoms="";
    this.downloadtypes="xls,doc,pdf,txt,csv,zip,dmg,exe";
    this.navigationtag="div,table";
