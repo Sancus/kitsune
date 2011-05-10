@@ -78,6 +78,15 @@ LANGUAGES = dict([(i.lower(), LOCALES[i].native) for i in SUMO_LANGUAGES])
 
 LANGUAGE_URL_MAP = dict([(i.lower(), i) for i in SUMO_LANGUAGES])
 
+# Locales that are known but unsupported. Keys are the locale, values are
+# an optional fallback locale, or None, to use the LANGUAGE_CODE.
+NON_SUPPORTED_LOCALES = {
+    'af': None,
+    'nb-NO': 'no',
+    'nn-NO': 'no',
+    'sr': 'sr-CYRL',  # Override the tendency to go sr->sr-LATN.
+}
+
 TEXT_DOMAIN = 'messages'
 
 SITE_ID = 1
@@ -232,6 +241,7 @@ INSTALLED_APPS = (
     'landings',
     'announcements',
     'messages',
+    'commonware.response.cookies',
 
     # Extra apps for testing.
     'django_nose',
@@ -450,6 +460,7 @@ JAVA_BIN = '/usr/bin/java'
 #
 # Sessions
 SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 
@@ -565,7 +576,6 @@ CELERY_EAGER_PROPAGATES_EXCEPTIONS = True  # Explode loudly during tests.
 
 # Wiki rebuild settings
 WIKI_REBUILD_TOKEN = 'sumo:wiki:full-rebuild'
-WIKI_REBUILD_ON_DEMAND = False
 
 # Anonymous user cookie
 ANONYMOUS_COOKIE_NAME = 'SUMO_ANONID'

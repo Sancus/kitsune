@@ -287,7 +287,7 @@ class NewDocumentTests(TestCaseBase):
         self.client.login(username='admin', password='testpass')
         response = self.client.get(reverse('wiki.new_document'))
         doc = pq(response.content)
-        eq_(7, len(doc('input[checked=checked]')))
+        eq_(9, len(doc('input[checked=checked]')))
         eq_(None, doc('input[name="tags"]').attr('required'))
 
     @mock.patch.object(ReviewableRevisionInLocaleEvent, 'fire')
@@ -591,6 +591,30 @@ class NewRevisionTests(TestCaseBase):
             {'summary': 'Windy', 'content': 'gerbils', 'form': 'rev'},
             locale=None)
 
+    def test_new_revision_warning(self):
+        """When editing based on current revision, we should show a warning if
+        there are newer unapproved revisions."""
+        # Create a new revision that is at least 1 second newer than current
+        created = datetime.now() + timedelta(seconds=1)
+        r = revision(document=self.d, created=created, save=True)
+
+        # Verify there is a warning box
+        response = self.client.get(reverse('wiki.edit_document',
+                                           args=[self.d.slug]))
+        assert len(pq(response.content)('div.warning-box'))
+
+        # Verify there is no warning box if editing the latest unreviewed
+        response = self.client.get(reverse('wiki.new_revision_based_on',
+                                           args=[self.d.slug, r.id]))
+        assert not len(pq(response.content)('div.warning-box'))
+
+        # Create a newer unreviewed revision and now warning shows
+        created =created + timedelta(seconds=1)
+        revision(document=self.d, created=created, save=True)
+        response = self.client.get(reverse('wiki.new_revision_based_on',
+                                           args=[self.d.slug, r.id]))
+        assert len(pq(response.content)('div.warning-box'))
+
 
 class DocumentEditTests(TestCaseBase):
     """Test the editing of document level fields."""
@@ -648,6 +672,35 @@ class DocumentEditTests(TestCaseBase):
         eq_(200, response.status_code)
         doc = Document.uncached.get(pk=self.d.pk)
         eq_(new_title, doc.title)
+
+    def test_archive_permission_off(self):
+        """Shouldn't be able to change is_archive bit without permission."""
+        u = user(save=True)
+        add_permission(u, Document, 'change_document')
+        self.client.login(username=u.username, password='testpass')
+        data = new_document_data()
+        # Try to set is_archived, even though we shouldn't have permission to:
+        data.update(form='doc', is_archived='on')
+        response = post(self.client, 'wiki.edit_document', data,
+                        args=[self.d.slug])
+        eq_(200, response.status_code)
+        doc = Document.uncached.get(pk=self.d.pk)
+        assert not doc.is_archived
+
+    # TODO: Factor with test_archive_permission_off.
+    def test_archive_permission_on(self):
+        """Shouldn't be able to change is_archive bit without permission."""
+        u = user(save=True)
+        add_permission(u, Document, 'change_document')
+        add_permission(u, Document, 'archive_document')
+        self.client.login(username=u.username, password='testpass')
+        data = new_document_data()
+        data.update(form='doc', is_archived='on')
+        response = post(self.client, 'wiki.edit_document', data,
+                        args=[self.d.slug])
+        eq_(200, response.status_code)
+        doc = Document.uncached.get(pk=self.d.pk)
+        assert doc.is_archived
 
 
 class DocumentListTests(TestCaseBase):

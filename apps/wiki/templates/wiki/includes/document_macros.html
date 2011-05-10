@@ -42,6 +42,16 @@
       {% endtrans %}
     </div>
   {% endif %}
+  {% if document.is_archived %}
+    <div class="warning-box">
+        <p>
+          {% trans %}
+            This article is no longer maintained, so its content might be out
+            of date.
+          {% endtrans %}
+        </p>
+    </div>
+  {% endif %}
 {%- endmacro %}
 
 {% macro document_content(document, fallback_reason, request, settings) -%}
@@ -83,4 +93,16 @@
     {{ comma() }}
     <a href="{{ url('wiki.tag', topic.slug) }}">{{ _(topic.name) }}</a>
   {%- endfor %}
+{%- endmacro %}
+
+{% macro edit_messages(document, show_revision_warning) -%}
+  {% if show_revision_warning %}
+    <div class="warning-box">
+      {% trans url=url('wiki.document_revisions', document.slug) %}
+        Warning: There are newer unreviewed revisions of this article.
+        See <a href="{{url}}">the history</a> to base your edit on an
+        existing unreviewed revision.
+      {% endtrans %}
+    </div>
+  {% endif %}
 {%- endmacro %}

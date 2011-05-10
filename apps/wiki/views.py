@@ -239,11 +239,14 @@ def edit_document(request, document_slug, revision_id=None):
     disclose_description = bool(request.GET.get('opendescription'))
     doc_form = rev_form = None
     if doc.allows_revision_by(user):
-        rev_form = RevisionForm(instance=rev, initial={'based_on': rev.id,
-                                                       'comment': ''})
+        rev_form = RevisionForm(
+            instance=rev,
+            initial={'based_on': rev.id, 'comment': ''})
     if doc.allows_editing_by(user):
-        doc_form = DocumentForm(initial=_document_form_initial(doc),
-            can_create_tags=user.has_perm('taggit.add_tag'))
+        doc_form = DocumentForm(
+            initial=_document_form_initial(doc),
+            can_create_tags=user.has_perm('taggit.add_tag'),
+            can_archive=user.has_perm('wiki.archive_document'))
 
     if request.method == 'GET':
         if not (rev_form or doc_form):
@@ -258,8 +261,11 @@ def edit_document(request, document_slug, revision_id=None):
             if doc.allows_editing_by(user):
                 post_data = request.POST.copy()
                 post_data.update({'locale': request.locale})
-                doc_form = DocumentForm(post_data, instance=doc,
-                    can_create_tags=user.has_perm('taggit.add_tag'))
+                doc_form = DocumentForm(
+                    post_data,
+                    instance=doc,
+                    can_create_tags=user.has_perm('taggit.add_tag'),
+                    can_archive=user.has_perm('wiki.archive_document'))
                 if doc_form.is_valid():
                     # Get the possibly new slug for the imminent redirection:
                     doc = doc_form.save(None)
@@ -286,11 +292,14 @@ def edit_document(request, document_slug, revision_id=None):
             else:
                 raise PermissionDenied
 
+    show_revision_warning = _show_revision_warning(doc, rev)
+
     return jingo.render(request, 'wiki/edit_document.html',
                         {'revision_form': rev_form,
                          'document_form': doc_form,
                          'disclose_description': disclose_description,
-                         'document': doc})
+                         'document': doc,
+                         'show_revision_warning': show_revision_warning})
 
 
 @login_required
@@ -436,6 +445,7 @@ def translate(request, document_slug, revision_id=None):
         raise PermissionDenied
 
     doc_form = rev_form = None
+    base_rev = None
 
     if user_has_doc_perm:
         doc_initial = _document_form_initial(doc) if doc else None
@@ -444,15 +454,17 @@ def translate(request, document_slug, revision_id=None):
     if user_has_rev_perm:
         initial = {'based_on': based_on_rev.id, 'comment': ''}
         if revision_id:
-            r = Revision.objects.get(pk=revision_id)
-            initial.update(content=r.content, summary=r.summary,
-                           keywords=r.keywords)
+            base_rev = Revision.objects.get(pk=revision_id)
+            initial.update(content=base_rev.content,
+                           summary=base_rev.summary,
+                           keywords=base_rev.keywords)
         elif not doc:
             initial.update(content=based_on_rev.content,
                            summary=based_on_rev.summary,
                            keywords=based_on_rev.keywords)
         instance = doc and get_current_or_latest_revision(doc)
         rev_form = RevisionForm(instance=instance, initial=initial)
+        base_rev = base_rev or instance
 
     if request.method == 'POST':
         which_form = request.POST.get('form', 'both')
@@ -499,11 +511,14 @@ def translate(request, document_slug, revision_id=None):
                               args=[doc_slug])
                 return HttpResponseRedirect(url)
 
+    show_revision_warning = _show_revision_warning(doc, base_rev)
+
     return jingo.render(request, 'wiki/translate.html',
                         {'parent': parent_doc, 'document': doc,
                          'document_form': doc_form, 'revision_form': rev_form,
                          'locale': request.locale, 'based_on': based_on_rev,
-                         'disclose_description': disclose_description})
+                         'disclose_description': disclose_description,
+                         'show_revision_warning': show_revision_warning})
 
 
 @require_POST
@@ -695,6 +710,7 @@ def _document_form_initial(document):
             'slug': document.slug,
             'category': document.category,
             'is_localizable': document.is_localizable,
+            'is_archived': document.is_archived,
             'tags': [t.name for t in document.tags.all()],
             'firefox_versions': [x.item_id for x in
                                  document.firefox_versions.all()],
@@ -719,3 +735,10 @@ def _maybe_schedule_rebuild(form):
 
 def _get_next_url_fallback_localization(request):
     return get_next_url(request) or reverse('dashboards.localization')
+
+
+def _show_revision_warning(document, revision):
+    if revision:
+        return document.revisions.filter(created__gt=revision.created,
+                                         reviewed=None).exists()
+    return False

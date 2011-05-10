@@ -61,11 +61,28 @@ def find_supported(test):
             x.split('-', 1)[0] == test.lower().split('-', 1)[0]]
 
 
+def get_non_supported(lang):
+    """Find known non-supported locales with fallbacks."""
+    lang = lang.lower()
+    langs = dict((k.lower(), v) for k, v in
+                 settings.NON_SUPPORTED_LOCALES.items())
+    if lang in langs:
+        if langs[lang] is None:
+            return settings.LANGUAGE_CODE
+        return langs[lang]
+    return None
+
+
 def get_best_language(accept_lang):
     """Given an Accept-Language header, return the best-matching language."""
 
     LUM = settings.LANGUAGE_URL_MAP
+    NSL = settings.NON_SUPPORTED_LOCALES
+    LC = settings.LANGUAGE_CODE
     langs = dict(LUM)
+    # Add in non-supported first to allow overriding prefix behavior.
+    langs.update((k.lower(), v if v else LC) for k, v in NSL.items() if
+                 k.lower() not in langs)
     langs.update((k.split('-')[0], v) for k, v in LUM.items() if
                  k.split('-')[0] not in langs)
     ranked = parse_accept_lang_header(accept_lang)
@@ -76,7 +93,7 @@ def get_best_language(accept_lang):
         pre = lang.split('-')[0]
         if pre in langs:
             return langs[pre]
-    # Could not find an acceptable language.
+    # Couldn't find any acceptable locale.
     return False
 
 
@@ -94,6 +111,8 @@ def split_path(path):
     lang = first.lower()
     if lang in settings.LANGUAGE_URL_MAP:
         return settings.LANGUAGE_URL_MAP[lang], rest
+    elif get_non_supported(lang) is not None:
+        return get_non_supported(lang), rest
     else:
         supported = find_supported(first)
         if supported:
