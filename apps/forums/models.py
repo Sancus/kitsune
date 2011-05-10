@@ -3,12 +3,14 @@ import datetime
 from django.db import models
 from django.contrib.auth.models import User
 
+from tidings.models import NotificationsMixin
+
 from access import has_perm, perm_is_defined_on
-from notifications.models import NotificationsMixin
+from activity.models import ActionMixin
+import forums
 from sumo.helpers import urlparams, wiki_to_html
 from sumo.urlresolvers import reverse
 from sumo.models import ModelBase
-import forums
 
 
 def _last_post_from(posts, exclude_post=None):
@@ -161,14 +163,12 @@ class Thread(NotificationsMixin, ModelBase):
     def update_last_post(self, exclude_post=None):
         """Set my last post to the newest, excluding the given post."""
         last = _last_post_from(self.post_set, exclude_post=exclude_post)
-        if last:
-            self.last_post = last
-        # Otherwise, I have no posts. We leave the reference to the nonexistent
-        # or unrelated post in place, which causes Django to automatically
-        # delete me.
+        self.last_post = last
+        # If self.last_post is None, and this was called from Post.delete,
+        # then Post.delete will erase the thread, as well.
 
 
-class Post(ModelBase):
+class Post(ActionMixin, ModelBase):
     thread = models.ForeignKey('Thread')
     content = models.TextField()
     author = models.ForeignKey(User)
@@ -220,6 +220,9 @@ class Post(ModelBase):
             forum.save()
 
         super(Post, self).delete(*args, **kwargs)
+        # If I was the last post in the thread, delete the thread.
+        if thread.last_post is None:
+            thread.delete()
 
     @property
     def page(self):

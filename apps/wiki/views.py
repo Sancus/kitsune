@@ -8,6 +8,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import (HttpResponse, HttpResponseRedirect,
                          Http404, HttpResponseBadRequest)
 from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import (require_GET, require_POST,
                                           require_http_methods)
 
@@ -99,14 +100,10 @@ def document(request, document_slug, template=None):
                                 slug=document_slug)
         # If there's a translation to the requested locale, take it:
         translation = doc.translated_to(request.locale)
-        if translation and translation.current_revision:
+        if translation:
             url = translation.get_absolute_url()
             url = urlparams(url, query_dict=request.GET)
             return HttpResponseRedirect(url)
-        elif translation and doc.current_revision:
-            # Found a translation but its current_revision is None
-            # and OK to fall back to parent (parent is approved).
-            fallback_reason = 'translation_not_approved'
         elif doc.current_revision:
             # There is no translation
             # and OK to fall back to parent (parent is approved).
@@ -175,7 +172,15 @@ def list_documents(request, category=None, tag=None):
 
     if tag:
         tagobj = get_object_or_404(Tag, slug=tag)
-        docs = docs.filter(tags__name__in=[tagobj.name])
+        default_lang = settings.WIKI_DEFAULT_LANGUAGE
+        if request.locale == default_lang:
+            docs = docs.filter(tags__name=tagobj.name)
+        else:
+            # blows up: docs = docs.filter(parent__tags__name=tagobj.name)
+            parent_ids = Document.objects.filter(
+                locale=default_lang, tags__name=tagobj.name) \
+                .values_list('id', flat=True)
+            docs = docs.filter(parent__in=parent_ids)
 
     docs = paginate(request, docs, per_page=DOCUMENTS_PER_PAGE)
     return jingo.render(request, 'wiki/list_documents.html',
@@ -306,7 +311,7 @@ def document_revisions(request, document_slug):
         Document, locale=request.locale, slug=document_slug)
     revs = Revision.objects.filter(document=doc).order_by('-created', '-id')
 
-    return jingo.render(request, 'wiki/document_revisions.html',
+    return jingo.render(request, 'wiki/history.html',
                         {'revisions': revs, 'document': doc})
 
 
@@ -588,6 +593,7 @@ def json_view(request):
 
 
 @require_POST
+@csrf_exempt
 def helpful_vote(request, document_slug):
     """Vote for Helpful/Not Helpful document"""
     document = get_object_or_404(
@@ -626,11 +632,17 @@ def delete_revision(request, document_slug, revision_id):
     revision = get_object_or_404(Revision, pk=revision_id,
                                  document__slug=document_slug)
     document = revision.document
+    only_revision = document.revisions.count() == 1
 
     if request.method == 'GET':
         # Render the confirmation page
         return jingo.render(request, 'wiki/confirm_revision_delete.html',
-                            {'revision': revision, 'document': document})
+                            {'revision': revision, 'document': document,
+                             'only_revision': only_revision})
+
+    # Don't delete the only revision of a document
+    if only_revision:
+        return HttpResponseBadRequest()
 
     # Handle confirm delete form POST
     log.warning('User %s is deleting revision with id=%s' %
@@ -653,6 +665,28 @@ def delete_revision(request, document_slug, revision_id):
 
     return HttpResponseRedirect(reverse('wiki.document_revisions',
                                         args=[document.slug]))
+
+
+@login_required
+def delete_document(request, document_slug):
+    """Delete a revision."""
+    document = get_object_or_404(Document, locale=request.locale,
+                                 slug=document_slug)
+
+    # Check permission
+    if not document.allows_deleting_by(request.user):
+        raise PermissionDenied
+
+    if request.method == 'GET':
+        # Render the confirmation page
+        return jingo.render(request, 'wiki/confirm_document_delete.html',
+                            {'document': document})
+
+    # Handle confirm delete form POST
+    document.delete()
+
+    return jingo.render(request, 'wiki/confirm_document_delete.html',
+                        {'document': document, 'delete_confirmed': True})
 
 
 def _document_form_initial(document):

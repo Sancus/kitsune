@@ -11,9 +11,11 @@ from nose.tools import eq_
 from pyquery import PyQuery as pq
 from taggit.models import Tag
 
+from questions.tests import tags_eq
 from sumo.urlresolvers import reverse
 from sumo.helpers import urlparams
 from sumo.tests import post, get, attrs_eq
+from users.tests import user, add_permission
 from wiki.cron import calculate_related_documents
 from wiki.events import (EditDocumentEvent, ReviewableRevisionInLocaleEvent,
                          ApproveRevisionInLocaleEvent)
@@ -133,10 +135,9 @@ class DocumentTests(TestCaseBase):
         d2 = document(parent=r.document, locale='fr', slug='french', save=True)
         revision(document=d2, is_approved=False, save=True)
         url = reverse('wiki.document', args=[r.document.slug], locale='fr')
-        response = self.client.get(url)
+        response = self.client.get(url, follow=True)
+        eq_('http://testserver/fr/kb/french', response.redirect_chain[0][0])
         doc = pq(response.content)
-        eq_(r.document.title, doc('#main h1.title').text())
-
         # Fallback message is shown.
         eq_(1, len(doc('#doc-pending-fallback')))
         # Removing this as it shows up in text(), and we don't want to depend
@@ -161,6 +162,8 @@ class DocumentTests(TestCaseBase):
         doc('#doc-pending-fallback').remove()
         # Included content is English.
         eq_(pq(r.document.html)('div').text(), doc('#doc-content div').text())
+        # Only two document tabs show (Article,Translate)
+        eq_(2, len(doc('#doc-tabs li')))
 
     def test_redirect(self):
         """Make sure documents with REDIRECT directives redirect properly.
@@ -217,6 +220,23 @@ class DocumentTests(TestCaseBase):
         resp = self.client.get(d.get_absolute_url())
         doc = pq(resp.content)
         assert 'Localize' not in doc('#doc-tabs li').text()
+
+    def test_topics_enUS(self):
+        """Make sure an en-US document shows the right topics."""
+        d = document(is_localizable=True, save=True)
+        d.tags.add('tag1', 'tag2')
+        r = self.client.get(d.get_absolute_url())
+        doc = pq(r.content)
+        eq_('tag1 tag2', doc('li.topic a').text())
+
+    def test_topics_es(self):
+        """Make sure an es document shows the right topics (inherited)."""
+        d_enUS = document(is_localizable=True, save=True)
+        d_enUS.tags.add('tag1')
+        d_es = document(parent=d_enUS, locale='es', save=True)
+        r = self.client.get(d_es.get_absolute_url())
+        doc = pq(r.content)
+        eq_('tag1', doc('li.topic a').text())
 
 
 class RevisionTests(TestCaseBase):
@@ -470,7 +490,7 @@ class NewRevisionTests(TestCaseBase):
         eq_(doc('#id_content')[0].value, r.content)
 
     @mock.patch.object(Site.objects, 'get_current')
-    @mock.patch.object(settings._wrapped, 'CONFIRM_ANONYMOUS_WATCHES', False)
+    @mock.patch.object(settings._wrapped, 'TIDINGS_CONFIRM_ANONYMOUS_WATCHES', False)
     def test_new_revision_POST_document_with_current(self, get_current):
         """HTTP POST to new revision URL creates the revision on a document.
 
@@ -552,13 +572,13 @@ class NewRevisionTests(TestCaseBase):
         self.d.save()
         tags = ['tag1', 'tag2', 'tag3']
         self.d.tags.add(*tags)
-        eq_(tags, list(self.d.tags.values_list('name', flat=True)))
+        tags_eq(self.d, tags)
         tags = ['tag1', 'tag4']
         data = new_document_data(tags)
         data['form'] = 'doc'
         self.client.post(reverse('wiki.edit_document', args=[self.d.slug]),
                          data)
-        eq_(tags, list(self.d.tags.values_list('name', flat=True)))
+        tags_eq(self.d, tags)
 
     @mock.patch.object(Site.objects, 'get_current')
     def test_new_form_maintains_based_on_rev(self, get_current):
@@ -678,12 +698,12 @@ class DocumentRevisionsTests(TestCaseBase):
     def test_document_revisions_list(self):
         """Verify the document revisions list view."""
         d = _create_document()
-        user = User.objects.get(pk=118533)
+        user_ = User.objects.get(pk=118533)
         r1 = revision(summary="a tweak", content='lorem ipsum dolor',
-                      keywords='kw1 kw2', document=d, creator=user)
+                      keywords='kw1 kw2', document=d, creator=user_)
         r1.save()
         r2 = revision(summary="another tweak", content='lorem dimsum dolor',
-                      keywords='kw1 kw2', document=d, creator=user)
+                      keywords='kw1 kw2', document=d, creator=user_)
         r2.save()
         response = self.client.get(reverse('wiki.document_revisions',
                                    args=[d.slug]))
@@ -703,6 +723,9 @@ class DocumentRevisionsTests(TestCaseBase):
         # Verify there are Review links now
         eq_(2, len(doc('#revision-list div.status a')))
         eq_('Review', doc('#revision-list div.status:first').text())
+        # Verify edit revision link
+        eq_('/en-US/kb/test-document/edit/{r}'.format(r=r2.id),
+            doc('#revision-list div.edit a')[0].attrib['href'])
 
 
 class ReviewRevisionTests(TestCaseBase):
@@ -712,12 +735,12 @@ class ReviewRevisionTests(TestCaseBase):
     def setUp(self):
         super(ReviewRevisionTests, self).setUp()
         self.document = _create_document()
-        user = User.objects.get(pk=118533)
+        user_ = User.objects.get(pk=118533)
         self.revision = Revision(summary="lipsum",
                                  content='<div>Lorem {for mac}Ipsum{/for} '
                                          'Dolor</div>',
                                  keywords='kw1 kw2', document=self.document,
-                                 creator=user)
+                                 creator=user_)
         self.revision.save()
 
         self.client.login(username='admin', password='testpass')
@@ -737,7 +760,7 @@ class ReviewRevisionTests(TestCaseBase):
 
     @mock.patch.object(send_reviewed_notification, 'delay')
     @mock.patch.object(Site.objects, 'get_current')
-    @mock.patch.object(settings._wrapped, 'CONFIRM_ANONYMOUS_WATCHES', False)
+    @mock.patch.object(settings._wrapped, 'TIDINGS_CONFIRM_ANONYMOUS_WATCHES', False)
     def test_approve_revision(self, get_current, reviewed_delay):
         """Verify revision approval with proper notifications."""
         get_current.return_value.domain = 'testserver'
@@ -814,7 +837,7 @@ class ReviewRevisionTests(TestCaseBase):
         """Make sure it works for localizations as well."""
         get_current.return_value.domain = 'testserver'
         doc = self.document
-        user = User.objects.get(pk=118533)
+        user_ = User.objects.get(pk=118533)
 
         # Create the translated document based on the current revision
         doc_es = _create_document(locale='es', parent=doc)
@@ -825,7 +848,7 @@ class ReviewRevisionTests(TestCaseBase):
         # Add a new revision to the parent and set it as the current one
         rev = revision(summary="another tweak", content='lorem dimsum dolor',
                        significance=SIGNIFICANCES[0][0], keywords='kw1 kw2',
-                       document=doc, creator=user, is_approved=True,
+                       document=doc, creator=user_, is_approved=True,
                        based_on=self.revision)
         rev.save()
 
@@ -834,7 +857,7 @@ class ReviewRevisionTests(TestCaseBase):
                           content='<div>Lorem {for mac}Ipsum{/for} '
                                   'Dolor</div>',
                           keywords='kw1 kw2', document=doc_es,
-                          creator=user, based_on=doc.current_revision)
+                          creator=user_, based_on=doc.current_revision)
         rev_es2.save()
 
         # Whew, now render the review page
@@ -899,8 +922,8 @@ class ReviewRevisionTests(TestCaseBase):
         has only rejected revisions should show a message.
 
         """
-        user = User.objects.get(pk=118533)
-        en_revision = revision(is_approved=False, save=True, reviewer=user,
+        user_ = User.objects.get(pk=118533)
+        en_revision = revision(is_approved=False, save=True, reviewer=user_,
                                reviewed=datetime.now())
 
         # Create the translated document based on the current revision
@@ -933,11 +956,11 @@ class CompareRevisionTests(TestCaseBase):
         super(CompareRevisionTests, self).setUp()
         self.document = _create_document()
         self.revision1 = self.document.current_revision
-        user = User.objects.get(pk=118533)
+        user_ = User.objects.get(pk=118533)
         self.revision2 = Revision(summary="lipsum",
                                  content='<div>Lorem Ipsum Dolor</div>',
                                  keywords='kw1 kw2',
-                                 document=self.document, creator=user)
+                                 document=self.document, creator=user_)
         self.revision2.save()
 
         self.client.login(username='admin', password='testpass')
@@ -1186,8 +1209,8 @@ class TranslateTests(TestCaseBase):
 
     def test_translate_rejected_parent(self):
         """Translate view of rejected English document shows warning."""
-        user = User.objects.get(pk=118533)
-        en_revision = revision(is_approved=False, save=True, reviewer=user,
+        user_ = User.objects.get(pk=118533)
+        en_revision = revision(is_approved=False, save=True, reviewer=user_,
                                reviewed=datetime.now())
 
         url = reverse('wiki.translate', locale='es',
@@ -1246,18 +1269,18 @@ class DocumentWatchTests(TestCaseBase):
 
     def test_watch_unwatch(self):
         """Watch and unwatch a document."""
-        user = User.objects.get(username='rrosario')
+        user_ = User.objects.get(username='rrosario')
         # Subscribe
         response = post(self.client, 'wiki.document_watch',
                        args=[self.document.slug])
         eq_(200, response.status_code)
-        assert EditDocumentEvent.is_notifying(user, self.document), \
+        assert EditDocumentEvent.is_notifying(user_, self.document), \
                'Watch was not created'
         # Unsubscribe
         response = post(self.client, 'wiki.document_unwatch',
                        args=[self.document.slug])
         eq_(200, response.status_code)
-        assert not EditDocumentEvent.is_notifying(user, self.document), \
+        assert not EditDocumentEvent.is_notifying(user_, self.document), \
                'Watch was not destroyed'
 
 
@@ -1281,18 +1304,18 @@ class LocaleWatchTests(TestCaseBase):
 
     def test_watch_unwatch(self):
         """Watch and unwatch a document."""
-        user = User.objects.get(username='rrosario')
+        user_ = User.objects.get(username='rrosario')
 
         # Subscribe
         response = post(self.client, 'wiki.locale_watch')
         eq_(200, response.status_code)
-        assert ReviewableRevisionInLocaleEvent.is_notifying(user,
+        assert ReviewableRevisionInLocaleEvent.is_notifying(user_,
                                                             locale='en-US')
 
         # Unsubscribe
         response = post(self.client, 'wiki.locale_unwatch')
         eq_(200, response.status_code)
-        assert not ReviewableRevisionInLocaleEvent.is_notifying(user,
+        assert not ReviewableRevisionInLocaleEvent.is_notifying(user_,
                                                                 locale='en-US')
 
 
@@ -1342,24 +1365,24 @@ class HelpfulVoteTests(TestCaseBase):
     def test_vote_yes(self):
         """Test voting helpful."""
         d = self.document
-        user = User.objects.get(username='rrosario')
+        user_ = User.objects.get(username='rrosario')
         self.client.login(username='rrosario', password='testpass')
         response = post(self.client, 'wiki.document_vote',
                         {'helpful': 'Yes'}, args=[self.document.slug])
         eq_(200, response.status_code)
-        votes = HelpfulVote.objects.filter(document=d, creator=user)
+        votes = HelpfulVote.objects.filter(document=d, creator=user_)
         eq_(1, votes.count())
         assert votes[0].helpful
 
     def test_vote_no(self):
         """Test voting not helpful."""
         d = self.document
-        user = User.objects.get(username='rrosario')
+        user_ = User.objects.get(username='rrosario')
         self.client.login(username='rrosario', password='testpass')
         response = post(self.client, 'wiki.document_vote',
                         {'not-helpful': 'No'}, args=[d.slug])
         eq_(200, response.status_code)
-        votes = HelpfulVote.objects.filter(document=d, creator=user)
+        votes = HelpfulVote.objects.filter(document=d, creator=user_)
         eq_(1, votes.count())
         assert not votes[0].helpful
 
@@ -1492,6 +1515,27 @@ class RevisionDeleteTestCase(TestCaseBase):
         d = Document.objects.get(pk=d.pk)
         eq_(prev_revision, d.current_revision)
 
+    def test_delete_only_revision(self):
+        """If there is only one revision, it can't be deleted."""
+        self.client.login(username='admin', password='testpass')
+
+        # Create document with only 1 revision
+        doc = document(save=True)
+        rev = revision(document=doc, save=True)
+
+        # Confirm page should show the message
+        response = get(self.client, 'wiki.delete_revision',
+                       args=[doc.slug, rev.id])
+        eq_(200, response.status_code)
+        eq_('Unable to delete only revision of the document',
+            pq(response.content)('h1.title').text())
+
+        # POST should return bad request and revision should still exist
+        response = post(self.client, 'wiki.delete_revision',
+                        args=[doc.slug, rev.id])
+        eq_(400, response.status_code)
+        Revision.uncached.get(id=rev.id)
+
 
 class ApprovedWatchTests(TestCaseBase):
     """Tests for un/subscribing to revision approvals."""
@@ -1513,21 +1557,80 @@ class ApprovedWatchTests(TestCaseBase):
 
     def test_watch_unwatch(self):
         """Watch and unwatch a document."""
-        user = User.objects.get(username='rrosario')
+        user_ = User.objects.get(username='rrosario')
         locale = 'es'
 
         # Subscribe
         response = post(self.client, 'wiki.approved_watch',
                         {'locale': locale})
         eq_(200, response.status_code)
-        assert ApproveRevisionInLocaleEvent.is_notifying(user, locale=locale)
+        assert ApproveRevisionInLocaleEvent.is_notifying(user_, locale=locale)
 
         # Unsubscribe
         response = post(self.client, 'wiki.approved_unwatch',
                         {'locale': locale})
         eq_(200, response.status_code)
-        assert not ApproveRevisionInLocaleEvent.is_notifying(user,
+        assert not ApproveRevisionInLocaleEvent.is_notifying(user_,
                                                              locale=locale)
+
+
+class DocumentDeleteTestCase(TestCaseBase):
+    """Tests for document delete."""
+    def setUp(self):
+        super(DocumentDeleteTestCase, self).setUp()
+        self.document = document(save=True)
+        self.user = user(username='testuser', save=True)
+
+    def test_delete_document_without_permissions(self):
+        """Deleting a document without permissions sends 403."""
+        self.client.login(username='testuser', password='testpass')
+        response = get(self.client, 'wiki.document_delete',
+                       args=[self.document.slug])
+        eq_(403, response.status_code)
+
+        response = post(self.client, 'wiki.document_delete',
+                        args=[self.document.slug])
+        eq_(403, response.status_code)
+
+    def test_delete_document_logged_out(self):
+        """Deleting a document while logged out redirects to login."""
+        response = get(self.client, 'wiki.document_delete',
+                       args=[self.document.slug])
+        redirect = response.redirect_chain[0]
+        eq_(302, redirect[1])
+        eq_('http://testserver/%s%s?next=/en-US/kb/%s/delete' %
+            (settings.LANGUAGE_CODE, settings.LOGIN_URL,
+             self.document.slug),
+            redirect[0])
+
+        response = post(self.client, 'wiki.document_delete',
+                        args=[self.document.slug])
+        redirect = response.redirect_chain[0]
+        eq_(302, redirect[1])
+        eq_('http://testserver/%s%s?next=/en-US/kb/%s/delete' %
+            (settings.LANGUAGE_CODE, settings.LOGIN_URL,
+             self.document.slug),
+            redirect[0])
+
+    def _test_delete_document_with_permission(self):
+        self.client.login(username='testuser', password='testpass')
+        response = get(self.client, 'wiki.document_delete',
+                       args=[self.document.slug])
+        eq_(200, response.status_code)
+
+        response = post(self.client, 'wiki.document_delete',
+                        args=[self.document.slug])
+        eq_(0, Document.objects.filter(pk=self.document.id).count())
+
+    def test_document_with_l10n_permission(self):
+        """Deleting a document with permissions should work."""
+        add_permission(self.user, Document, 'delete_document_en-US')
+        self._test_delete_document_with_permission()
+
+    def test_revision_with_permission(self):
+        """Deleting a document with delete_document permission should work."""
+        add_permission(self.user, Document, 'delete_document')
+        self._test_delete_document_with_permission()
 
 
 # TODO: Merge with wiki.tests.doc_rev()?

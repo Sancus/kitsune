@@ -9,7 +9,6 @@ from pyquery import PyQuery as pq
 from gallery import forms
 from gallery.models import Image, Video
 from gallery.tests import image, video
-from gallery.utils import get_draft_title
 from gallery.views import _get_media_info
 from sumo.tests import post, LocalizingClient, TestCase
 from sumo.urlresolvers import reverse
@@ -24,17 +23,17 @@ INVALID_VID = 'apps/gallery/tests/media/test.rtf'
 VIDEO_PATH = settings.MEDIA_URL + settings.GALLERY_VIDEO_PATH
 
 
-class DeleteEditImageTestCase(TestCase):
+class DeleteEditImageTests(TestCase):
     fixtures = ['users.json']
 
     def setUp(self):
-        super(DeleteEditImageTestCase, self).setUp()
+        super(DeleteEditImageTests, self).setUp()
         self.client = LocalizingClient()
         self.client.login(username='jsocol', password='testpass')
 
     def tearDown(self):
         Image.objects.all().delete()
-        super(DeleteEditImageTestCase, self).tearDown()
+        super(DeleteEditImageTests, self).tearDown()
 
     def test_delete_image(self):
         """Deleting an uploaded image works."""
@@ -94,17 +93,17 @@ class DeleteEditImageTestCase(TestCase):
         eq_('admin', Image.objects.get().updated_by.username)
 
 
-class UploadImageTestCase(TestCase):
+class UploadImageTests(TestCase):
     fixtures = ['users.json']
 
     def setUp(self):
-        super(UploadImageTestCase, self).setUp()
+        super(UploadImageTests, self).setUp()
         self.client = LocalizingClient()
         self.client.login(username='pcraciunoiu', password='testpass')
 
     def tearDown(self):
         Image.objects.all().delete()
-        super(UploadImageTestCase, self).tearDown()
+        super(UploadImageTests, self).tearDown()
 
     def test_empty_image(self):
         """Specifying an invalid model returns 400."""
@@ -137,7 +136,7 @@ class UploadImageTestCase(TestCase):
         eq_('pcraciunoiu', img.creator.username)
         eq_(150, img.file.width)
         eq_(200, img.file.height)
-        eq_(get_draft_title(img.creator), img.title)
+        assert 'pcraciunoiu' in img.title
         eq_('Autosaved draft.', img.description)
         eq_('en-US', img.locale)
 
@@ -213,7 +212,7 @@ class UploadImageTestCase(TestCase):
     def test_upload_draft_image(self):
         """Uploading draft image works, sets locale too."""
         u = User.objects.get(username='pcraciunoiu')
-        img = image(creator=u, title=get_draft_title(u))
+        img = image(creator=u, is_draft=True)
         # No thumbnail yet.
         eq_(None, img.thumbnail)
 
@@ -229,16 +228,17 @@ class UploadImageTestCase(TestCase):
         eq_('Auf wiedersehen!', img.description)
         # Thumbnail generated after form is saved.
         eq_(90, img.thumbnail.width)
+        eq_(None, img.is_draft)
 
     def test_image_title_locale_unique_validation(self):
         """Posting an existing locale/title combination shows a validation
         error."""
         u = User.objects.get(username='pcraciunoiu')
-        image(creator=u, title=get_draft_title(u))
+        image(creator=u, is_draft=True, title='Some title')
         post(self.client, 'gallery.upload',
              {'locale': 'de', 'title': 'Hasta la vista',
               'description': 'Auf wiedersehen!'}, args=['image'])
-        image(creator=u, title=get_draft_title(u))
+        image(creator=u, is_draft=True, title='Some title')
         r = post(self.client, 'gallery.upload',
                  {'locale': 'de', 'title': 'Hasta la vista',
                   'description': 'Auf wiedersehen!'},
@@ -249,13 +249,13 @@ class UploadImageTestCase(TestCase):
         assert doc('ul.errorlist li').text().startswith(msg)
 
 
-class ViewHelpersTestCase(TestCase):
+class ViewHelpersTests(TestCase):
     fixtures = ['users.json']
 
     def tearDown(self):
         Image.objects.all().delete()
         Video.objects.all().delete()
-        super(ViewHelpersTestCase, self).setUp()
+        super(ViewHelpersTests, self).setUp()
 
     def test_get_media_info_video(self):
         """Gets video and format info."""
@@ -272,17 +272,17 @@ class ViewHelpersTestCase(TestCase):
         eq_('jpeg', info_format)
 
 
-class UploadVideoTestCase(TestCase):
+class UploadVideoTests(TestCase):
     fixtures = ['users.json']
 
     def setUp(self):
-        super(UploadVideoTestCase, self).setUp()
+        super(UploadVideoTests, self).setUp()
         self.client = LocalizingClient()
         self.client.login(username='pcraciunoiu', password='testpass')
 
     def tearDown(self):
         Video.objects.all().delete()
-        super(UploadVideoTestCase, self).tearDown()
+        super(UploadVideoTests, self).tearDown()
 
     def _upload_extension(self, ext):
         with open(TEST_VID[ext]) as f:
@@ -305,7 +305,7 @@ class UploadVideoTestCase(TestCase):
         eq_(32, file['height'])
         assert file['url'].endswith(vid.get_absolute_url())
         eq_('pcraciunoiu', vid.creator.username)
-        eq_(get_draft_title(vid.creator), vid.title)
+        assert 'pcraciunoiu' in vid.title
         eq_('Autosaved draft.', vid.description)
         eq_('en-US', vid.locale)
         with open(TEST_VID['ogv']) as f:
@@ -424,9 +424,10 @@ class UploadVideoTestCase(TestCase):
         # Thumbnail and poster generated after form is saved.
         eq_(150, vid.poster.width)
         eq_(90, vid.thumbnail.width)
+        eq_(None, vid.is_draft)
 
 
-class SearchTestCase(TestCase):
+class SearchTests(TestCase):
     client = LocalizingClient()
     fixtures = ['users.json', 'gallery/media.json']
 
@@ -460,8 +461,15 @@ class SearchTestCase(TestCase):
         eq_(404, response.status_code)
 
 
-class GalleryTestCase(TestCase):
+class GalleryTests(TestCase):
     def test_gallery_invalid_type(self):
         url = reverse('gallery.gallery', args=['foo'])
         response = self.client.get(url, follow=True)
         eq_(404, response.status_code)
+
+    def test_redirect(self):
+        """/gallery redirects to /gallery/images"""
+        response = self.client.get(reverse('gallery.home', locale='en-US'),
+                                   follow=False)
+        eq_(301, response.status_code)
+        eq_('http://testserver/en-US/gallery/images', response['location'])

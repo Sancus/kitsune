@@ -72,6 +72,8 @@ class PostsTemplateTests(ForumTestCase):
         response = get(self.client, 'forums.posts', args=[forum.slug, 4],
                        locale='fr')
         eq_(200, response.status_code)
+        eq_('/forums/test-forum/4',
+            pq(response.content)('link[rel="canonical"]')[0].attrib['href'])
 
     def test_long_title_truncated_in_crumbs(self):
         """A very long thread title gets truncated in the breadcrumbs"""
@@ -123,6 +125,24 @@ class PostsTemplateTests(ForumTestCase):
         response = post(self.client, 'forums.watch_thread', {'watch': 'no'},
                         args=[t.forum.slug, t.id])
         self.assertNotContains(response, 'Watching')
+
+    def test_show_reply_fields(self):
+        """Reply fields show if user has permission to post."""
+        self.client.login(username='jsocol', password='testpass')
+
+        f = Forum.objects.filter()[0]
+        t = f.thread_set.all()[0]
+        response = get(self.client, 'forums.posts', args=[f.slug, t.pk])
+        self.assertContains(response, 'thread-reply')
+
+    def test_restricted_hide_reply(self):
+        """Reply fields don't show if user has no permission to post."""
+        self.client.login(username='jsocol', password='testpass')
+
+        f = Forum.objects.get(slug='visible')
+        t = f.thread_set.all()[0]
+        response = get(self.client, 'forums.posts', args=[f.slug, t.pk])
+        self.assertNotContains(response, 'thread-reply')
 
 
 class ThreadsTemplateTests(ForumTestCase):
@@ -206,6 +226,25 @@ class ThreadsTemplateTests(ForumTestCase):
                         args=[f.slug])
         self.assertNotContains(response, 'Watching')
 
+    def test_canonical_url(self):
+        response = get(self.client, 'forums.threads', args=['test-forum'])
+        eq_('/forums/test-forum',
+            pq(response.content)('link[rel="canonical"]')[0].attrib['href'])
+
+    def test_show_new_thread(self):
+        """'Post new thread' shows if user has permission to post."""
+        self.client.login(username='jsocol', password='testpass')
+
+        response = get(self.client, 'forums.threads', args=['test-forum'])
+        self.assertContains(response, 'Post a new thread')
+
+    def test_restricted_hide_new_thread(self):
+        """'Post new thread' doesn't show if user has no permission to post."""
+        self.client.login(username='jsocol', password='testpass')
+
+        response = get(self.client, 'forums.threads', args=['visible'])
+        self.assertNotContains(response, 'Post a new thread')
+
 
 class ForumsTemplateTests(ForumTestCase):
 
@@ -234,6 +273,11 @@ class ForumsTemplateTests(ForumTestCase):
         """Forums with restricted view_in permission shouldn't show up."""
         response = get(self.client, 'forums.forums')
         self.assertNotContains(response, 'restricted-forum')
+
+    def test_canonical_url(self):
+        response = get(self.client, 'forums.forums')
+        eq_('/forums',
+            pq(response.content)('link[rel="canonical"]')[0].attrib['href'])
 
 
 class NewThreadTemplateTests(ForumTestCase):

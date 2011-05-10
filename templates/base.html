@@ -38,6 +38,10 @@
   {% endfor %}
 {% endif %}
 
+{% if refresh %}
+  <meta http-equiv="refresh" content="{{ refresh[1] }};url={{ refresh[0] }}"/>
+{% endif %}
+
 {% if canonical_url %}
   <link rel="canonical" href="{{ canonical_url }}" />
 {% endif %}
@@ -50,7 +54,8 @@
 <body class="moz-header-slim {{ classes }}"
       data-readonly="{{ settings.READ_ONLY|json }}"
       data-for-os="{{ for_os|json }}"
-      data-for-version="{{ for_version|json }}">
+      data-for-version="{{ for_version|json }}"
+      data-usernames-api="{{ url('users.api.usernames') }}">
 
 {% include 'layout/header.html' %}
 
@@ -131,6 +136,7 @@
 </footer>{# /#footer #}
 
 <script src="{{ url('jsi18n') }}build:{{ BUILD_ID_JS }}"></script>
+<script src="{{ url('wafflejs') }}"></script>
 {{ js('common') }}
 {% for script in scripts %}
 {{ js(script) }}

@@ -5,9 +5,9 @@ from django.contrib.sites.models import Site
 from django.core.mail import EmailMessage
 from django.template import Context, loader
 
+from tidings.events import InstanceEvent, Event
 from tower import ugettext as _
 
-from notifications.events import InstanceEvent, Event
 from sumo.urlresolvers import reverse
 from wiki.models import Document
 
@@ -25,7 +25,7 @@ def notification_mails(revision, subject, template, url, users_and_watches):
          'creator': revision.creator,
          'url': url,
          'host': Site.objects.get_current().domain}
-    mail = EmailMessage(subject, '', settings.NOTIFICATIONS_FROM_ADDRESS)
+    mail = EmailMessage(subject, '', settings.TIDINGS_FROM_ADDRESS)
 
     for u, w in users_and_watches:
         c['watch'] = w

@@ -1,11 +1,14 @@
 from django.conf.urls.defaults import patterns, url
-from django.views.generic.simple import redirect_to
+
+from sumo.views import redirect_to
 
 
 urlpatterns = patterns('dashboards.views',
-    url(r'^dashboard$', redirect_to, {'url': 'dashboard/forums'}),
+    url(r'^dashboard$', redirect_to, {'url': 'dashboards.review'},
+        name='dashboards.default'),
     url(r'^dashboard/forums$', 'review', name='dashboards.review'),
-    #url(r'^dashboard/questions$', 'questions', name='dashboards.questions'),
+    url(r'^dashboard/(?P<group_id>\d+)$', 'group_dashboard',
+        name='dashboards.group'),
     url(r'^localization$', 'localization', name='dashboards.localization'),
     url(r'^contributors$', 'contributors', name='dashboards.contributors'),
     url(r'^wiki-rows/(?P<readout_slug>[^/]+)', 'wiki_rows',

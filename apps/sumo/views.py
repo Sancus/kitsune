@@ -4,6 +4,7 @@ import socket
 import StringIO
 
 from django.conf import settings
+from django.contrib.sites.models import Site
 from django.core.cache import parse_backend_uri
 from django.http import (HttpResponsePermanentRedirect, HttpResponseRedirect,
                          HttpResponse)
@@ -14,17 +15,21 @@ from commonware.decorators import xframe_allow
 import django_qunit.views
 import jingo
 from PIL import Image
+from session_csrf import anonymous_csrf
 
 from sumo.urlresolvers import reverse
+from users.forms import AuthenticationForm
 
 
 log = logging.getLogger('k.services')
 
 
+@anonymous_csrf
 def handle403(request):
     """A 403 message that looks nicer than the normal Apache forbidden page."""
 
-    return jingo.render(request, 'handlers/403.html', status=403)
+    return jingo.render(request, 'handlers/403.html',
+                        {'form': AuthenticationForm() }, status=403)
 
 
 def handle404(request):
@@ -46,6 +51,17 @@ def redirect_to(request, url, permanent=True, **kwargs):
         return HttpResponsePermanentRedirect(dest)
 
     return HttpResponseRedirect(dest)
+
+
+def deprecated_redirect(request, url, **kwargs):
+    """Redirect with an interstitial page telling folks to update their
+    bookmarks.
+    """
+    dest = reverse(url, kwargs=kwargs)
+    proto = 'https://' if request.is_secure() else 'http://'
+    host = Site.objects.get_current().domain
+    return jingo.render(request, 'sumo/deprecated.html',
+                        {'dest': dest, 'proto': proto, 'host': host})
 
 
 def robots(request):

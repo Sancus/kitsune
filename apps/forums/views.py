@@ -143,6 +143,8 @@ def reply(request, forum_slug, thread_id):
             reply_.author = request.user
             if 'preview' in request.POST:
                 reply_preview = reply_
+                reply_preview.author_post_count = \
+                    reply_.author.post_set.count()
             else:
                 reply_.save()
 
@@ -178,6 +180,8 @@ def new_thread(request, forum_slug):
                             title=form.cleaned_data['title'])
             post_preview = Post(thread=thread, author=request.user,
                                 content=form.cleaned_data['content'])
+            post_preview.author_post_count = \
+                post_preview.author.post_set.count()
         else:
             thread = forum.thread_set.create(creator=request.user,
                                              title=form.cleaned_data['title'])

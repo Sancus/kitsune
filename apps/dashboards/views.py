@@ -1,26 +1,22 @@
 from functools import partial
 
 from django.conf import settings
-from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.models import Group
 from django.http import Http404, HttpResponseRedirect, HttpResponse
-from django.utils.datastructures import SortedDict
+from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET
 
 import jingo
 from tower import ugettext as _
 
-from access.decorators import login_required
 from announcements.models import Announcement
-from dashboards import ACTIONS_PER_PAGE
+from dashboards.personal import GROUP_DASHBOARDS
 from dashboards.readouts import (overview_rows, READOUTS, L10N_READOUTS,
                                  CONTRIBUTOR_READOUTS)
+from dashboards.utils import model_actions, render_readouts
 from forums.models import Post
-from sumo_locales import LOCALES
 from sumo.urlresolvers import reverse
-from sumo.utils import paginate, smart_int
-from questions.models import Answer
-from wiki.events import (ApproveRevisionInLocaleEvent,
-                         ReviewableRevisionInLocaleEvent)
+from sumo.utils import smart_int
 
 
 def _kb_readout(request, readout_slug, readouts, locale=None, mode=None):
@@ -59,47 +55,21 @@ def localization_detail(request, readout_slug):
                       'dashboards.localization', _('Localization Dashboard'))
 
 
-def _kb_main(request, readouts, template, locale=None, extra_data=None):
-    """Render a KB statistics overview page.
-
-    Use the given template, pass the template the given readouts, limit the
-    considered data to the given locale, and pass along anything in the
-    `extra_data` dict to the template in addition to the standard data.
-
-    """
-    data = {'readouts': SortedDict((slug, class_(request, locale=locale))
-                         for slug, class_ in readouts.iteritems()),
-            'default_locale': settings.WIKI_DEFAULT_LANGUAGE,
-            'default_locale_name':
-                LOCALES[settings.WIKI_DEFAULT_LANGUAGE].native,
-            'current_locale_name': LOCALES[request.locale].native,
-            'is_watching_approved': ApproveRevisionInLocaleEvent.is_notifying(
-                request.user, locale=request.locale),
-            'is_watching_locale': ReviewableRevisionInLocaleEvent.is_notifying(
-                request.user, locale=request.locale),
-            'is_watching_approved_default':
-                ApproveRevisionInLocaleEvent.is_notifying(
-                    request.user, locale=settings.WIKI_DEFAULT_LANGUAGE)}
-    if extra_data:
-        data.update(extra_data)
-    return jingo.render(request, 'dashboards/' + template, data)
-
-
 @require_GET
 def localization(request):
     """Render aggregate data about articles in a non-default locale."""
     if request.locale == settings.WIKI_DEFAULT_LANGUAGE:
         return HttpResponseRedirect(reverse('dashboards.contributors'))
     data = {'overview_rows': partial(overview_rows, request.locale)}
-    return _kb_main(request, L10N_READOUTS, 'localization.html',
-                    extra_data=data)
+    return render_readouts(request, L10N_READOUTS, 'localization.html',
+                           extra_data=data)
 
 
 @require_GET
 def contributors(request):
     """Render aggregate data about the articles in the default locale."""
-    return _kb_main(request, CONTRIBUTOR_READOUTS, 'contributors.html',
-                    locale=settings.WIKI_DEFAULT_LANGUAGE)
+    return render_readouts(request, CONTRIBUTOR_READOUTS, 'contributors.html',
+                           locale=settings.WIKI_DEFAULT_LANGUAGE)
 
 
 @require_GET
@@ -113,26 +83,15 @@ def wiki_rows(request, readout_slug):
 
 
 @require_GET
-@login_required
 def review(request):
     """Review dashboard for a user, includes activity, announcements, etc."""
     return jingo.render(request, 'dashboards/review.html',
-                        {'actions': _actions(Post, request),
+                        {'actions': model_actions(Post, request),
                          'announcements': Announcement.get_site_wide()})
 
 
 @require_GET
-@login_required
-def questions(request):
-    """Support Forum dashboard for a user, includes activity,
-    announcements, etc."""
-    return jingo.render(request, 'dashboards/questions.html',
-                        {'actions': _actions(Answer, request),
-                         'announcements': Announcement.get_site_wide()})
-
-
-def _actions(model_class, request):
-    """Returns paginated activity for the given model."""
-    ct = ContentType.objects.get_for_model(model_class)
-    actions = request.user.action_inbox.filter(content_type=ct)
-    return paginate(request, actions, per_page=ACTIONS_PER_PAGE)
+def group_dashboard(request, group_id):
+    group = get_object_or_404(Group, pk=group_id)
+    return GROUP_DASHBOARDS[group.dashboard.dashboard](
+        request, group.id, group.dashboard.parameters).render()

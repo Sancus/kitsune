@@ -14,19 +14,20 @@ from django.db.models import Q
 from django.http import (HttpResponseRedirect, HttpResponse, Http404,
                          HttpResponseBadRequest, HttpResponseForbidden)
 from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import (require_POST, require_GET,
                                           require_http_methods)
 
 import jingo
 from mobility.decorators import mobile_template
+from session_csrf import anonymous_csrf
 from taggit.models import Tag
-from tower import ugettext as _
-from tower import ugettext_lazy as _lazy
+from tidings.events import ActivationRequestFailed
+from tidings.models import Watch
+from tower import ugettext as _, ugettext_lazy as _lazy
 
 from access.decorators import (has_perm_or_owns_or_403, permission_required,
                                login_required)
-from notifications.models import Watch
-from notifications.events import ActivationRequestFailed
 import questions as constants
 from questions.events import QuestionReplyEvent, QuestionSolvedEvent
 from questions.feeds import QuestionsFeed, AnswersFeed, TaggedQuestionsFeed
@@ -112,6 +113,7 @@ def questions(request):
                          'tags': tags, 'tagged': tagged})
 
 
+@anonymous_csrf  # Need this so the anon csrf gets set for watch forms. 
 def answers(request, question_id, form=None, watch_form=None,
             answer_preview=None, **extra_kwargs):
     """View the answers to a question."""
@@ -124,6 +126,7 @@ def answers(request, question_id, form=None, watch_form=None,
 
 
 @mobile_template('questions/{mobile/}new_question.html')
+@anonymous_csrf  # This view renders a login form
 def new_question(request, template=None):
     """Ask a new question."""
 
@@ -189,12 +192,11 @@ def new_question(request, template=None):
                              'host': Site.objects.get_current().domain})
 
     # Handle the form post.
-    just_logged_in = False  # Used below for whether to pre-load Question form.
     if not request.user.is_authenticated():
-        if request.POST.get('login', None):
+        if request.POST.get('login'):
             login_form = handle_login(request, only_active=False)
             register_form = RegisterForm()
-        elif request.POST.get('register', None):
+        elif request.POST.get('register'):
             login_form = AuthenticationForm()
             email_template = 'questions/email/confirm_question.ltxt'
             email_subject = _('Please confirm your Firefox Help question')
@@ -210,22 +212,20 @@ def new_question(request, template=None):
             message = _lazy('Request type not recognized.')
             return jingo.render(request, 'handlers/400.html',
                             {'message': message}, status=400)
-        if not request.user.is_authenticated():
+        if request.user.is_authenticated():
+            # Redirect to GET the current URL.
+            # This is required for the csrf middleware to set the auth'd tokens
+            # appropriately.
+            return HttpResponseRedirect(request.get_full_path())
+        else:
             return jingo.render(request, login_t,
                                 {'product': product, 'category': category,
                                  'title': request.POST.get('title'),
                                  'register_form': register_form,
                                  'login_form': login_form})
-        else:
-            just_logged_in = True
 
-    if just_logged_in:
-        form = NewQuestionForm(product=product,
-                               category=category,
-                               initial={'title': request.GET.get('search')})
-    else:
-        form = NewQuestionForm(product=product, category=category,
-                               data=request.POST)
+    form = NewQuestionForm(product=product, category=category,
+                           data=request.POST)
 
     if form.is_valid():
         question = Question(creator=request.user,
@@ -390,6 +390,7 @@ def solution(request, question_id, answer_id):
 
 
 @require_POST
+@csrf_exempt
 def question_vote(request, question_id):
     """I have this problem too."""
     question = get_object_or_404(Question, pk=question_id)
@@ -417,6 +418,7 @@ def question_vote(request, question_id):
 
 
 @require_POST
+@csrf_exempt
 def answer_vote(request, question_id, answer_id):
     """Vote for Helpful/Not Helpful answers"""
     answer = get_object_or_404(Answer, pk=answer_id, question=question_id)
@@ -628,6 +630,7 @@ def edit_answer(request, question_id, answer_id):
 
 
 @require_POST
+@anonymous_csrf
 def watch_question(request, question_id):
     """Start watching a question for replies or solution."""
 

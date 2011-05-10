@@ -321,6 +321,8 @@ class ViewProfileTests(TestCaseBase):
         eq_('pcraciunoiu', doc('#main-area h1').text())
         # No name set and livechat_id is not different => no optional fields.
         eq_(0, doc('#main-area ul').length)
+        # Check canonical url
+        eq_('/user/47963', doc('link[rel="canonical"]')[0].attrib['href'])
 
     def test_view_profile_mine(self):
         """Logged in, on my profile, I see an edit link."""
@@ -330,6 +332,15 @@ class ViewProfileTests(TestCaseBase):
         doc = pq(r.content)
         eq_('Edit my profile', doc('#doc-tabs li:last').text())
         self.client.logout()
+
+    def test_bio_links_nofollow(self):
+        profile = Profile.objects.get(user__id=47963)
+        profile.bio = 'http://getseo.com, [http://getseo.com]'
+        profile.save()
+        r = self.client.get(reverse('users.profile', args=[47963]))
+        eq_(200, r.status_code)
+        doc = pq(r.content)
+        eq_(2, len(doc('#bio a[rel="nofollow"]')))
 
 
 class PasswordChangeTests(TestCaseBase):

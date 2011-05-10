@@ -58,6 +58,9 @@ document_patterns = patterns('wiki.views',
     # Delete a revision
     url(r'^/revision/(?P<revision_id>\d+)/delete$', 'delete_revision',
         name='wiki.delete_revision'),
+
+    # Delete a document
+    url(r'^/delete', 'delete_document', name='wiki.document_delete'),
 )
 
 urlpatterns = patterns('wiki.views',
@@ -82,7 +85,7 @@ urlpatterns = patterns('wiki.views',
     url(r'^/preview-wiki-content$', 'preview_revision', name='wiki.preview'),
     url(r'^/category/(?P<category>\d+)$', 'list_documents',
         name='wiki.category'),
-    url(r'^/tag/(?P<tag>[^/]+)$', 'list_documents', name='wiki.tag'),
+    url(r'^/topic/(?P<tag>[^/]+)$', 'list_documents', name='wiki.tag'),
     (r'^/(?P<document_slug>[^/]+)', include(document_patterns)),
 )
 

@@ -1,14 +1,16 @@
-from datetime import datetime, timedelta
-
+import mock
 from nose.tools import eq_
 from pyquery import PyQuery as pq
 
 from django.contrib.auth.models import User
+from django.contrib.sites.models import Site
 
-from announcements.models import Announcement
+from announcements.tests import announcement
+from dashboards.tests import group_dashboard
 from forums.models import Post
 from sumo.tests import TestCase
 from sumo.urlresolvers import reverse
+from users.tests import user, group, profile
 from wiki.models import MAJOR_SIGNIFICANCE, MEDIUM_SIGNIFICANCE
 from wiki.tests import revision, translated_revision
 
@@ -116,7 +118,6 @@ class ContributorForumDashTests(TestCase):
 
 class AnnouncementForumDashTests(TestCase):
     fixtures = ['users.json']
-    content = "*crackles* Captain's log, stardate 43124.5 We are doomed."
 
     def setUp(self):
         super(AnnouncementForumDashTests, self).setUp()
@@ -125,11 +126,7 @@ class AnnouncementForumDashTests(TestCase):
 
     def test_active(self):
         """Active announcement shows."""
-        Announcement.objects.create(
-            creator=self.creator,
-            show_after=datetime.now() - timedelta(days=2),
-            show_until=datetime.now() + timedelta(days=2),
-            content=self.content)
+        announcement(creator=self.creator).save()
 
         response = self.client.get(reverse('dashboards.review'), follow=True)
         self.assertContains(response, 'stardate 43124.5')
@@ -139,3 +136,51 @@ class AnnouncementForumDashTests(TestCase):
         response = self.client.get(reverse('dashboards.review'), follow=True)
         doc = pq(response.content)
         assert not len(doc('ol.announcements'))
+
+
+class GroupLocaleDashTests(TestCase):
+
+    def setUp(self):
+        super(GroupLocaleDashTests, self).setUp()
+        self.g = group(save=True, name='A group')
+        # defaults to a 'de' localization dashboard
+        group_dashboard(group=self.g, save=True)
+
+    def test_anonymous_user(self):
+        """Checks the locale dashboard loads for an anonymous user."""
+        response = self.client.get(reverse('dashboards.group',
+                                           args=[self.g.pk]), follow=True)
+        eq_(200, response.status_code)
+        doc = pq(response.content)
+        # The locale dash tab does not show up.
+        eq_(1, len(doc('#doc-tabs li')))
+        # The subtitle shows French.
+        eq_(u'Deutsch', doc('#main h2.subtitle').text())
+
+    @mock.patch.object(Site.objects, 'get_current')
+    def test_for_user_active(self, get_current):
+        """Checks the locale dashboard loads for a user associated with it."""
+        get_current.return_value.domain = 'testserver'
+        # Create user/group and add user to group.
+        u = user(username='test', save=True)
+        u.groups.add(self.g)
+        profile(u).save()
+        # Create site-wide and group announcements and dashboard.
+        announcement().save()
+        content = 'stardate 12341'
+        announcement(group=self.g, content=content).save()
+
+        # Log in and check response.
+        self.client.login(username='test', password='testpass')
+        response = self.client.get(reverse('dashboards.group',
+                                           args=[self.g.pk]), follow=True)
+        eq_(200, response.status_code)
+        doc = pq(response.content)
+        # The locale dash tab shows up.
+        eq_(4, len(doc('#doc-tabs li')))
+        # The locale dash tabs shows up and is active
+        eq_(u'A group', doc('#doc-tabs li.active').text())
+        # The subtitle shows French.
+        eq_(u'Deutsch', doc('#main h2.subtitle').text())
+        # The correct announcement shows up.
+        self.assertContains(response, content)

@@ -107,7 +107,7 @@ ADMIN_MEDIA_PREFIX = '/admin-media/'
 
 # Paths that don't require a locale prefix.
 SUPPORTED_NONLOCALES = ('media', 'admin', 'robots.txt', 'services', '1',
-                        'postcrash')
+                        'postcrash', 'wafflejs')
 
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = '#%tc(zja8j01!r#h_y)=hy!^k)9az74k+-ib&ij&+**s3-e^_z'
@@ -120,15 +120,18 @@ TEMPLATE_LOADERS = (
 )
 
 TEMPLATE_CONTEXT_PROCESSORS = (
-    'django.core.context_processors.auth',
+    'django.contrib.auth.context_processors.auth',
     'django.core.context_processors.debug',
     'django.core.context_processors.media',
     'django.core.context_processors.request',
+    'session_csrf.context_processor',
+
     'django.contrib.messages.context_processors.messages',
 
     'sumo.context_processors.global_settings',
     'sumo.context_processors.for_data',
     'jingo_minify.helpers.build_ids',
+    'messages.context_processors.unread_message_count',
 )
 
 MIDDLEWARE_CLASSES = (
@@ -157,10 +160,10 @@ MIDDLEWARE_CLASSES = (
     'sumo.middleware.NoCacheHttpsMiddleware',
     'commonware.middleware.NoVarySessionMiddleware',
     'commonware.middleware.FrameOptionsHeader',
-    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'sumo.anonymous.AnonymousIdentityMiddleware',
+    'session_csrf.CsrfMiddleware',
     'twitter.middleware.SessionMiddleware',
     'sumo.middleware.PlusToSpaceMiddleware',
     'commonware.middleware.HidePasswordOnException',
@@ -208,7 +211,7 @@ INSTALLED_APPS = (
     'forums',
     'djcelery',
     'cronjobs',
-    'notifications',
+    'tidings',
     'activity',
     'questions',
     'adminplus',
@@ -228,6 +231,7 @@ INSTALLED_APPS = (
     'postcrash',
     'landings',
     'announcements',
+    'messages',
 
     # Extra apps for testing.
     'django_nose',
@@ -245,7 +249,8 @@ def JINJA_CONFIG():
     config = {'extensions': ['tower.template.i18n', 'caching.ext.cache',
                              'jinja2.ext.with_'],
               'finalize': lambda x: x if x is not None else ''}
-    if 'memcached' in cache.scheme and not settings.DEBUG:
+    if (hasattr(cache, 'scheme') and 'memcached' in cache.scheme and
+        not settings.DEBUG):
         # We're passing the _cache object directly to jinja because
         # Django can't store binary directly; it enforces unicode on it.
         # Details: http://jinja.pocoo.org/2/documentation/api#bytecode-cache
@@ -362,7 +367,7 @@ MINIFY_BUNDLES = {
             'global/mobile.css',
             'css/mobile.css',
             'css/wiki_syntax.css',
-        )
+        ),
     },
     'js': {
         'common': (
@@ -373,6 +378,8 @@ MINIFY_BUNDLES = {
             'js/kbox.js',
             'global/menu.js',
             'js/main.js',
+            'js/format.js',
+            'js/loadtest.js',
         ),
         'libs/jqueryui': (
             'js/libs/jqueryui.min.js',
@@ -441,9 +448,10 @@ MINIFY_BUNDLES = {
 JAVA_BIN = '/usr/bin/java'
 
 #
-# Session cookies
+# Sessions
 SESSION_COOKIE_SECURE = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 
 #
 # Connection information for Sphinx search
@@ -532,7 +540,7 @@ def read_only_mode(env):
 
     # Add in the read-only middleware before csrf middleware.
     extra = 'sumo.middleware.ReadOnlyMiddleware'
-    before = 'django.middleware.csrf.CsrfViewMiddleware'
+    before = 'session_csrf.CsrfMiddleware'
     m = list(env['MIDDLEWARE_CLASSES'])
     m.insert(m.index(before), extra)
     env['MIDDLEWARE_CLASSES'] = tuple(m)
@@ -583,8 +591,8 @@ THUMBNAIL_PROGRESS_HEIGHT = 32  # height of the above image
 VIDEO_MAX_FILESIZE = 16777216  # 16 megabytes, in bytes
 
 # Customer Care settings
-CC_MAX_TWEETS = 500   # Max. no. of tweets in DB
-CC_TWEETS_PERPAGE = 100   # How many tweets to collect in one go. Max: 100.
+CC_MAX_TWEETS = 500  # Max. no. of tweets in DB
+CC_TWEETS_PERPAGE = 100  # How many tweets to collect in one go. Max: 100.
 CC_SHOW_REPLIES = True  # Show replies to tweets?
 CC_ALLOW_REMOVE = True  # Allow users to hide tweets?
 
@@ -600,9 +608,11 @@ TWITTER_CONSUMER_KEY = ''
 TWITTER_CONSUMER_SECRET = ''
 
 
-NOTIFICATIONS_FROM_ADDRESS = 'notifications@support.mozilla.com'
+TIDINGS_FROM_ADDRESS = 'notifications@support.mozilla.com'
 # Anonymous watches must be confirmed.
-CONFIRM_ANONYMOUS_WATCHES = True
+TIDINGS_CONFIRM_ANONYMOUS_WATCHES = True
+TIDINGS_MODEL_BASE = 'sumo.models.ModelBase'
+TIDINGS_REVERSE = 'sumo.urlresolvers.reverse'
 
 
 # URL of the chat server.

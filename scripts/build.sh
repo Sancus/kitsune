@@ -33,10 +33,13 @@ if [ ! -d "$VENV/bin" ]; then
     virtualenv --no-site-packages $VENV
 fi
 source $VENV/bin/activate
-pip install -r requirements/compiled.txt
+pip install -r requirements/tests-compiled.txt
 
 # Using a vendor library for the rest.
 git submodule update --init --recursive
+
+# Fix any mistakes with private repos.
+pushd vendor > /dev/null && git submodule sync && popd > /dev/null
 
 python manage.py update_product_details
 

@@ -7,7 +7,7 @@ from django.utils.datastructures import SortedDict
 import jingo
 from tower import ugettext as _, ugettext_lazy as _lazy
 
-from dashboards.models import THIS_WEEK, ALL_TIME, PERIODS
+from dashboards import THIS_WEEK, ALL_TIME, PERIODS
 from sumo.urlresolvers import reverse
 from wiki.models import Document, MEDIUM_SIGNIFICANCE, MAJOR_SIGNIFICANCE
 
@@ -65,26 +65,26 @@ def overview_rows(locale):
         is_template=True).exclude(current_revision=None).exclude(
         parent=None).count()
 
-    return [dict(title=_('Most-Visited Articles'),
+    return {'most-visited': dict(title=_('Most-Visited Articles'),
                  url='#' + MostVisitedTranslationsReadout.slug,
                  numerator=popular_translated, denominator=TOP_N,
                  percent=percent_or_100(popular_translated, TOP_N),
                  description=_('These are the top 20 most visited articles, '
                                'which account for over 50% of the traffic to '
                                'the Knowledge Base.')),
-            dict(title=_('Templates'),
+            'templates': dict(title=_('Templates'),
                  url='#' + TemplateTranslationsReadout.slug,
                  numerator=template_translated, denominator=template_total,
                  percent=percent_or_100(template_translated, template_total),
                  description=_('How many of the approved templates '
                                'which allow translations have an approved '
                                'translation into this language')),
-            dict(title=_('All Knowledge Base Articles'),
+            'all': dict(title=_('All Knowledge Base Articles'),
                  numerator=translated, denominator=total,
                  percent=percent_or_100(translated, total),
                  description=_('How many of the approved English articles '
                                'which allow translations have an approved '
-                               'translation into this language'))]
+                               'translation into this language'))}
 
 
 class Readout(object):
@@ -224,7 +224,7 @@ class MostVisitedTranslationsReadout(MostVisitedDefaultLanguageReadout):
     slug = 'most-visited-translations'
 
     # L10n: Replace "English" with your language.
-    details_link_text = _lazy(u'All translations in English...')
+    details_link_text = _lazy(u'All translations...')
 
     significance_statuses = {
         MEDIUM_SIGNIFICANCE:
@@ -520,3 +520,8 @@ CONTRIBUTOR_READOUTS = SortedDict((t.slug, t) for t in
 # All:
 READOUTS = L10N_READOUTS.copy()
 READOUTS.update(CONTRIBUTOR_READOUTS)
+
+GROUP_L10N_READOUTS = SortedDict((t.slug, t) for t in
+    [MostVisitedTranslationsReadout, UnreviewedReadout])
+# English group locale is the same as l10n dashboard.
+GROUP_CONTRIBUTOR_READOUTS = CONTRIBUTOR_READOUTS

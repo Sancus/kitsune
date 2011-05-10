@@ -3,6 +3,7 @@ from datetime import datetime
 from django.contrib.auth.models import User, Group
 from django.db import models
 from django.db.models import Q
+from django.db.models.signals import post_save
 
 from tower import ugettext as _
 
@@ -49,16 +50,37 @@ class Announcement(ModelBase):
 
     @classmethod
     def get_site_wide(cls):
-        return cls.get_for_group()
+        return cls._group_query_filter(group=None)
 
     @classmethod
-    def get_for_group(cls, group_name=None):
-        """Returns visible announcements for a given group name, or in no group
-        if none is provided."""
-        group_q = (Q(group=Group.objects.get(name=group_name)) if group_name
-                   else Q(group=None))
+    def get_for_group_name(cls, group_name):
+        """Returns visible announcements for a given group name."""
+        return cls._group_query_filter(group__name=group_name)
+
+    @classmethod
+    def get_for_group_id(cls, group_id):
+        """Returns visible announcements for a given group id."""
+        return cls._group_query_filter(group__id=group_id)
+
+    @classmethod
+    def _group_query_filter(cls, **query_kwargs):
+        """Return visible announcements given a group query."""
         return Announcement.objects.filter(
             # Show if interval is specified and current or show_until is None
             Q(show_after__lt=datetime.now()) &
             (Q(show_until__gt=datetime.now()) | Q(show_until__isnull=True)),
-            group_q)
+            **query_kwargs)
+
+
+def connector(sender, instance, created, **kw):
+    # Only email new announcements in a group. We don't want to email everyone.
+    if created and instance.group:
+        from announcements.tasks import send_group_email
+        now = datetime.now()
+        if instance.is_visible():
+            send_group_email.delay(instance.pk)
+        elif now < instance.show_after:
+            send_group_email.delay(instance.pk, eta=instance.show_after)
+
+post_save.connect(connector, sender=Announcement,
+                  dispatch_uid='email_announcement')

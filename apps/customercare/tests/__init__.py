@@ -5,11 +5,15 @@ from django.conf import settings
 
 from customercare.models import (Tweet, CategoryMembership, CannedCategory,
                                  CannedResponse)
+from sumo.tests import with_save
 
 
-# TODO: Change save kwarg defaults to False to match other apps.
-def cc_category(save=True, **kwargs):
-    """Return a canned category."""
+def cc_category(save=False, **kwargs):
+    """Return a canned category.
+
+    Save it if save=True or if a `responses` kwarg is nonempty.
+
+    """
     responses = kwargs.pop('responses', [])
     save = save or responses  # Adding responses forces save.
     defaults = {'title': str(datetime.now()),
@@ -18,7 +22,7 @@ def cc_category(save=True, **kwargs):
     defaults.update(kwargs)
 
     category = CannedCategory(**defaults)
-    if save:
+    if save or responses:
         category.save()
     # Add responses to this category.
     for response, weight in responses:
@@ -28,8 +32,12 @@ def cc_category(save=True, **kwargs):
     return category
 
 
-def cc_response(save=True, **kwargs):
-    """Return a canned response."""
+def cc_response(save=False, **kwargs):
+    """Return a canned response.
+
+    Save it if save=True or if a `categories` kwarg is nonempty.
+
+    """
     categories = kwargs.pop('categories', [])
     save = save or categories  # Adding categories forces save.
 
@@ -39,7 +47,7 @@ def cc_response(save=True, **kwargs):
     defaults.update(kwargs)
 
     response = CannedResponse(**defaults)
-    if save:
+    if save or categories:
         response.save()
     # Add categories to this response.
     for category, weight in categories:
@@ -53,7 +61,8 @@ def cc_response(save=True, **kwargs):
 next_tweet_id = 1
 
 
-def tweet(save=False, **kwargs):
+@with_save
+def tweet(**kwargs):
     """Return a Tweet with valid default values or the ones passed in.
 
     Args:
@@ -76,7 +85,4 @@ def tweet(save=False, **kwargs):
     if 'tweet_id' not in kwargs:
         defaults['tweet_id'] = next_tweet_id
         next_tweet_id += 1
-    t = Tweet(**defaults)
-    if save:
-        t.save()
-    return t
+    return Tweet(**defaults)

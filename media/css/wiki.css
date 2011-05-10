@@ -158,6 +158,7 @@ article #toc ul li {
     color: #32559b;
     cursor: pointer;
     font-size: 13px;
+    min-width: 90px;
     padding: 2px 0 2px 20px;
 }
 
@@ -416,12 +417,30 @@ article.main div.tags input.adder {
     position: relative;
 }
 
-#preview #support-for {
-    margin: 0;
-    position: absolute;
-    right: -165px;
-    top: 0;
+#preview #support-for,
+#review-revision #support-for {
+    background: #fff;
+    border-radius: 10px;
+    -moz-border-radius: 10px;
+    -webkit-border-radius: 10px;
+    box-shadow: 0 4px 10px #999;
+    -moz-box-shadow: 0 4px 10px #999;
+    -webkit-box-shadow: 0 4px 10px #999;
+    margin: -90px 0 0;
+    padding: 15px;
+    position: fixed;
+    right: 100px;
+    top: 50%;
     width: 165px;
+    z-index: 10;
+}
+
+#review-revision #support-for {
+    display: none;
+}
+
+#review-revision .open #support-for {
+    display: block;
 }
 
 /* Translate specific */
@@ -628,9 +647,10 @@ details.h2 > summary {
 
 #revision-list div.comment {
     display: inline-block;
-    width: 280px;
+    width: 230px;
 }
 
+#revision-list div.edit,
 #revision-list div.delete {
     display: inline-block;
     text-align: center;
@@ -650,6 +670,12 @@ details.h2 > summary {
 #revision-list div.compare.bottom {
     background: transparent url(../img/wiki/compare.arrows.png) no-repeat 4px -40px;
     padding-top: 10px;
+}
+
+#delete-doc {
+    margin: 50px 0 0;
+    padding: 0 10px 0 0;
+    text-align: right;
 }
 
 /* Revision page */
@@ -752,15 +778,26 @@ td.diff_header {
     background-color:#ffaaaa;
 }
 
-/* Delete Revision */
+/* Delete Document/Revision */
+#delete-document h2 {
+    font-size: 20px;
+}
+
+#delete-document label,
 #delete-revision label {
     display: block;
     font-size: 16px;
     margin: 15px 0 0;
 }
 
+#delete-document form,
 #delete-revision form {
     margin: 20px 0 0;
+}
+
+#delete-document pre,
+#delete-revision pre {
+    white-space: pre-wrap;
 }
 
 /* Submit commit message modal */
@@ -856,12 +893,15 @@ div.video .kbox-container {
     color: #425662;
     display: none;
     font-size: 14px;
-    left: 50%;
-    margin: 0 0 0 -480px;
+    left: 0;
+    margin: 0 auto;
+    max-width: 900px;
+    min-width: 700px;
     padding: 25px 30px 15px;
     position: absolute;
+    right: 0;
     top: -10px;
-    width: 900px;
+    width: 90%;
     z-index: 100;
 }
 

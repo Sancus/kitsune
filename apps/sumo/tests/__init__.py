@@ -1,10 +1,10 @@
+from functools import wraps
 from os import listdir
 from os.path import join, dirname
 import re
 from smtplib import SMTPRecipientsRefused
 
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.test.client import Client
 
 from nose.tools import eq_
@@ -28,6 +28,8 @@ def starts_with(text, substring):
     """Assert `text` starts with `substring`."""
     assert text.startswith(substring), "%r doesn't start with %r" % (text,
                                                                      substring)
+
+
 def send_mail_raise_smtp(subject, content, from_emal, recipients):
     """Patch mail.send_mail with this in your tests to check what happens when
     an email fails to send."""
@@ -61,20 +63,6 @@ class LocalizingClient(Client):
     # prepending in a one-off case or do it outside a mock request.
 
 
-class FixtureMissingError(Exception):
-    """Raise this if a fixture is missing"""
-
-
-def get_user(username='jsocol'):
-    """Return a django user or raise FixtureMissingError"""
-    try:
-        return User.objects.get(username=username)
-    except User.DoesNotExist:
-        raise FixtureMissingError(
-            'Username "%s" not found. You probably forgot to import a'
-            ' users fixture.' % username)
-
-
 class MigrationTests(TestCase):
     """Sanity checks for the SQL migration scripts"""
 
@@ -99,12 +87,16 @@ class MigrationTests(TestCase):
 
     def test_innodb_and_utf8(self):
         """Make sure each created table uses the InnoDB engine and UTF-8."""
+        # Migrations are immutable, so just skip known failures:
+        KNOWN_FAILURES = set(['95-group-dashboards.sql'])
+
         # Heuristic: make sure there are at least as many "ENGINE=InnoDB"s as
         # "CREATE TABLE"s. (There might be additional "InnoDB"s in ALTER TABLE
         # statements, which are fine.)
         path = self._migrations_path()
-        # The ones before 66 have known failures.
-        for filename in sorted(listdir(path))[66:]:
+        for filename in sorted(listdir(path)):
+            if filename in KNOWN_FAILURES:
+                continue
             with open(join(path, filename)) as f:
                 contents = f.read()
             creates = contents.count('CREATE TABLE')
@@ -123,3 +115,20 @@ class MobileTestCase(TestCase):
 
     def setUp(self):
         self.client.cookies[settings.MOBILE_COOKIE] = 'on'
+
+
+def with_save(func):
+    """Decorate a model maker to add a `save` kwarg.
+
+    If save=True, the model maker will save the object before returning it.
+
+    """
+    @wraps(func)
+    def saving_func(*args, **kwargs):
+        save = kwargs.pop('save', False)
+        ret = func(*args, **kwargs)
+        if save:
+            ret.save()
+        return ret
+
+    return saving_func
