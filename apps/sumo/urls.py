@@ -7,6 +7,8 @@ from sumo import views
 
 services_patterns = patterns('',
     url('^/monitor$', views.monitor, name='sumo.monitor'),
+    url('^/version$', views.version_check, name='sumo.version'),
+    url('^/error$', views.error, name='sumo.error'),
 )
 
 

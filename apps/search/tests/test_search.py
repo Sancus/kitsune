@@ -15,14 +15,13 @@ import mock
 from nose import SkipTest
 from nose.tools import assert_raises, eq_
 from pyquery import PyQuery as pq
-import test_utils
 
 from forums.models import Post
 import search as constants
 from search.clients import (WikiClient, QuestionsClient,
                             DiscussionClient, SearchError)
 from search.utils import start_sphinx, stop_sphinx, reindex, crc32
-from sumo.tests import LocalizingClient
+from sumo.tests import LocalizingClient, TestCase
 from sumo.urlresolvers import reverse
 from wiki.models import Document
 
@@ -32,7 +31,7 @@ def render(s, context):
     return t.render(**context)
 
 
-class SphinxTestCase(test_utils.TransactionTestCase):
+class SphinxTestCase(TestCase):
     """
     This test case type can setUp and tearDown the sphinx daemon.  Use this
     when testing any feature that requires sphinx.
@@ -40,33 +39,30 @@ class SphinxTestCase(test_utils.TransactionTestCase):
 
     fixtures = ['users.json', 'search/documents.json',
                 'posts.json', 'questions.json']
-    sphinx = True
-    sphinx_is_running = False
-
-    def setUp(self):
-        if not SphinxTestCase.sphinx_is_running:
-            if not settings.SPHINX_SEARCHD or not settings.SPHINX_INDEXER:
-                raise SkipTest()
-
-            os.environ['DJANGO_ENVIRONMENT'] = 'test'
-
-            if os.path.exists(settings.TEST_SPHINX_PATH):
-                shutil.rmtree(settings.TEST_SPHINX_PATH)
-
-            os.makedirs(os.path.join(settings.TEST_SPHINX_PATH, 'data'))
-            os.makedirs(os.path.join(settings.TEST_SPHINX_PATH, 'log'))
-            os.makedirs(os.path.join(settings.TEST_SPHINX_PATH, 'etc'))
-
-            reindex()
-            start_sphinx()
-            time.sleep(1)
-            SphinxTestCase.sphinx_is_running = True
 
     @classmethod
-    def tearDownClass(cls):
-        if SphinxTestCase.sphinx_is_running:
-            stop_sphinx()
-            SphinxTestCase.sphinx_is_running = False
+    def setup_class(cls):
+        super(SphinxTestCase, cls).setup_class()
+        if not settings.SPHINX_SEARCHD or not settings.SPHINX_INDEXER:
+            raise SkipTest()
+
+        os.environ['DJANGO_ENVIRONMENT'] = 'test'
+
+        if os.path.exists(settings.TEST_SPHINX_PATH):
+            shutil.rmtree(settings.TEST_SPHINX_PATH)
+
+        os.makedirs(os.path.join(settings.TEST_SPHINX_PATH, 'data'))
+        os.makedirs(os.path.join(settings.TEST_SPHINX_PATH, 'log'))
+        os.makedirs(os.path.join(settings.TEST_SPHINX_PATH, 'etc'))
+
+        reindex()
+        start_sphinx()
+        time.sleep(1)
+
+    @classmethod
+    def teardown_class(cls):
+        stop_sphinx()
+        super(SphinxTestCase, cls).teardown_class()
 
 
 def test_sphinx_down():
@@ -83,10 +79,7 @@ def test_sphinx_down():
 # * Replace magic numbers with the defined constants.
 
 class SearchTest(SphinxTestCase):
-
-    def setUp(self):
-        super(SearchTest, self).setUp()
-        self.client = LocalizingClient()
+    client_class = LocalizingClient
 
     def test_indexer(self):
         wc = WikiClient()
@@ -133,7 +126,7 @@ class SearchTest(SphinxTestCase):
     def test_category(self):
         wc = WikiClient()
         results = wc.query('', ({'filter': 'category', 'value': [10]},))
-        eq_(4, len(results))
+        eq_(5, len(results))
         results = wc.query('', ({'filter': 'category', 'value': [30]},))
         eq_(1, len(results))
 
@@ -166,7 +159,7 @@ class SearchTest(SphinxTestCase):
         wc = WikiClient()
 
         results = wc.query('')
-        eq_(5, len(results))
+        eq_(6, len(results))
 
     def test_firefox_filter(self):
         """Filtering by Firefox version."""
@@ -569,6 +562,21 @@ class SearchTest(SphinxTestCase):
         results = wc.query('video^^^$$$^')
         eq_(1, len(results))
 
+    def test_clean_hyphens(self):
+        """Hyphens in words aren't special characters."""
+        wc = WikiClient()
+        results = wc.query('marque-page')
+        eq_(1, len(results))
+
+    def test_exclude_words(self):
+        """Excluding words with -word works."""
+        wc = WikiClient()
+        results = wc.query('spanish')
+        eq_(1, len(results))
+
+        results = wc.query('spanish -content')
+        eq_(0, len(results))
+
     def test_no_redirects(self):
         """Redirect articles should never appear in search results."""
         wc = WikiClient()
@@ -599,6 +607,20 @@ class SearchTest(SphinxTestCase):
                                            locale='en-US'))
         eq_(400, response.status_code)
         assert not response.content
+
+    def test_archived(self):
+        """Ensure archived articles show only when requested."""
+        qs = {'q': 'impalas', 'a': 1, 'w': 1, 'format': 'json',
+              'include_archived': 'on'}
+        response = self.client.get(reverse('search'), qs)
+        results = json.loads(response.content)['results']
+        eq_(1, len(results))
+        assert results[0]['url'].endswith('archived-article')
+
+        qs = {'q': 'impalas', 'a': 0, 'w': 1, 'format': 'json'}
+        response = self.client.get(reverse('search'), qs)
+        results = json.loads(response.content)['results']
+        eq_([], results)
 
 
 query = lambda *args, **kwargs: WikiClient().query(*args, **kwargs)

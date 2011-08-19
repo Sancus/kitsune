@@ -11,6 +11,11 @@
       <img src="{{ profile_avatar(profile.user) }}" alt="">
     </section>
     <section id="main-area">
+      {% if user.is_staff and user.has_perm('users.change_profile') %}
+        <div id="admin-actions">
+          <a class="edit" href="{{ url('admin:users_profile_change', profile.user.id) }}">{{ _('Edit user profile') }}</a>
+        </div>
+      {% endif %}
       <h1>{{ display_name(profile.user) }}
           {% if profile.name %}
             <em>({{ profile.user.username }})</em>
@@ -26,13 +31,16 @@
           {{ profile.country }}
         {% endif %}
       </h2>
+      {% if waffle.flag('private-messaging') %}
+        {{ private_message(profile.user) }}
+      {% endif %}
       {% if profile.public_email or profile.website or profile.twitter or
             profile.facebook or profile.irc_handle or
             (profile.livechat_id and
              profile.livechat_id|lower != profile.user.username|lower) %}
         <div id="contact-box">
           <ul>
-            {% if profile.public_email %}
+            {% if profile.public_email and request.user.is_authenticated() %}
               <li>
                 <label>{{ _('Email:') }}</label>
                 {{ profile.user.email|public_email }}
@@ -73,6 +81,16 @@
         <div id="bio">
           <h2>{{ _('About {user}')|f(user=display_name(profile.user)) }}</h2>
           {{ profile.bio|wiki_to_html(nofollow=True) }}
+        </div>
+      {% endif %}
+      {% if groups %}
+        <div id="groups">
+          <h2>{{ _("{user}'s Groups")|f(user=display_name(profile.user)) }}</h2>
+          <ul>
+            {% for g in groups %}
+              <li>{{ group_link(g) }}</li>
+            {% endfor %}
+          </ul>
         </div>
       {% endif %}
     </section>

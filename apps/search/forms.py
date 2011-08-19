@@ -85,6 +85,9 @@ class SearchForm(forms.Form):
         initial=[o.id for o in OPERATING_SYSTEMS],
         coerce_only=True)
 
+    include_archived = forms.BooleanField(
+        required=False, label=_lazy('Include obsolete articles?'))
+
     # Support questions and discussion forums fields
     created = forms.TypedChoiceField(
         required=False, coerce=int, empty_value=0,

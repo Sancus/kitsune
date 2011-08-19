@@ -1,0 +1,13 @@
+{% extends "messages/base.html" %}
+{% from "messages/includes/macros.html" import outbox_message with context %}
+{% set title = _('Read Sent Message') %}
+{% set crumbs = [(url('messages.inbox'), _('Messages')),
+                 (url('messages.outbox'), _('Sent Messages')),
+                 (None, title)] %}
+
+{% block content %}
+  <article id="read-message" class="main message-view">
+    <h1>{{ title }}</h1>
+    {{ outbox_message(message) }}
+  </article>
+{% endblock %}

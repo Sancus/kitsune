@@ -4,7 +4,7 @@ from nose import SkipTest
 from nose.tools import eq_
 
 from sumo.helpers import urlparams
-from sumo.tests import LocalizingClient, TestCase
+from sumo.tests import TestCase
 from sumo.urlresolvers import reverse
 
 
@@ -25,10 +25,10 @@ class UsernamesTests(TestCase):
         eq_('[]', res.content)
 
     def test_query(self):
-        res = self.client.get(urlparams(self.url, u='a'))
+        res = self.client.get(urlparams(self.url, query='a'))
         eq_(200, res.status_code)
         data = json.loads(res.content)
-        eq_(2, len(data))
+        eq_(2, len(data['suggestions']))
 
     def test_post(self):
         res = self.client.post(self.url)

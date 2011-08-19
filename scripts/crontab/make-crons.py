@@ -68,9 +68,14 @@ HOME = /tmp
 
 # Once per day.
 0 16 * * * $CRON reload_wiki_traffic_stats
+40 1 * * * $CRON update_weekly_votes
+0 42 * * * $CRON update_top_contributors
 
 # Twice per week.
-05 01 * * 1,4 $CRON update_weekly_votes
+#05 01 * * 1,4 $CRON update_weekly_votes
+
+# Once per week.
+21 03 * * 3 $DJANGO purge_hashes
 
 MAILTO=root
 """

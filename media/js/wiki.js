@@ -5,48 +5,35 @@
 
 (function ($) {
     function init() {
+        var $body = $('body');
+
         $('select.enable-if-js').removeAttr('disabled');
 
         initPrepopulatedSlugs();
         initDetailsTags();
 
-        if ($('body').is('.document') || $('body').is('.home')) {  // Document page
+        if ($body.is('.document')) {  // Document page
             ShowFor.initForTags();
-            new ArticleHelpfulVote(true);
+            new k.AjaxVote('#helpful-vote form', {
+                positionMessage: true
+            });
             initAOABanner();
-        } else if ($('body').is('.review')) { // Review pages
+        } else if ($body.is('.review')) { // Review pages
             ShowFor.initForTags();
         }
 
-        if ($('body').is('.home')) {
-            initClearOddSections();
-        }
-
-        if ($('body').is('.edit, .new, .translate')) {
+        if ($body.is('.edit, .new, .translate')) { // Document form page
             initArticlePreview();
             initTitleAndSlugCheck();
             initPreValidation();
         }
 
+        initDiffPicker();
+        initDiffToggle();
+
         Marky.createFullToolbar('.editor-tools', '#id_content');
-    }
 
-    // Add `odd` CSS class to home page content sections for older browsers.
-    function initClearOddSections() {
-        clearOddSections();
-        $('#os, #browser').change(clearOddSections);
-    }
-
-    function clearOddSections() {
-        var odd = true;
-        $('#home-content-explore section').removeClass('odd');
-        $('#home-content-explore section:visible').each(function(){
-            // I can't use :nth-child(odd) because of showfor
-            if (odd) {
-                $(this).addClass('odd');
-            }
-            odd = !odd;
-        });
+        initReadyForL10N();
     }
 
     // Make <summary> and <details> tags work even if the browser doesn't support them.
@@ -292,6 +279,124 @@
                     return false;
                 }
                 return true;
+            }
+        });
+    }
+
+    // The diff revision picker
+    function initDiffPicker() {
+        $('div.revision-diff').each(function() {
+            var $diff = $(this);
+            $diff.find('div.picker a').unbind().click(function(ev) {
+                ev.preventDefault();
+                $.ajax({
+                    url: $(this).attr('href'),
+                    type: 'GET',
+                    dataType: 'html',
+                    success: function(html) {
+                        var kbox = new KBox(html, {
+                            modal: true,
+                            id: 'diff-picker-kbox',
+                            closeOnOutClick: true,
+                            destroy: true,
+                            title: gettext('Choose revisions to compare')
+                        });
+                        kbox.open();
+                        ajaxifyDiffPicker(kbox.$kbox.find('form'), kbox, $diff);
+                    },
+                    error: function() {
+                        var message = gettext('There was an error.');
+                        alert(message);
+                    }
+                });
+            });
+        });
+    }
+
+    function ajaxifyDiffPicker($form, kbox, $diff) {
+        $form.submit(function(ev) {
+            ev.preventDefault();
+            $.ajax({
+                url: $form.attr('action'),
+                type: 'GET',
+                data: $form.serialize(),
+                dataType: 'html',
+                success: function(html) {
+                    var $container = $diff.parent();
+                    kbox.close();
+                    $diff.replaceWith(html);
+                    initDiffPicker();
+                    initDiffToggle($container);
+                }
+            });
+        });
+    }
+
+    // Add ability to switch the diff to full screen + fluid.
+    function initDiffToggle($container) {
+        $('table.diff', $container).each(function() {
+            var $table = $(this),
+                $link = $table.before('<a class="toggle-diff" href="#"></a>').prev(),
+                fullWidth = false, // Are we full width?
+                $clone, // A clone of the table.
+                $placeholder; // A placeholder that fills in height behind
+                              // overlayed table.
+            $link.text(gettext('Toggle Diff'));
+
+            $link.click(function(ev){
+                var top;
+                ev.preventDefault();
+                if (fullWidth) {
+                    $placeholder.remove();
+                    $table.show();
+                    $clone.remove();
+                    $(window).unbind('resize', syncHeight);
+                } else {
+                    top = $table.offset().top;
+                    $clone = $table.clone().addClass('full');
+                    $clone.css('top', top + 'px');
+                    $('body').append($clone);
+                    $placeholder = $table.before('<section/>').prev();
+                    syncHeight();
+                    $table.hide();
+                    $(window).resize(syncHeight);
+                }
+                fullWidth = !fullWidth;
+            });
+            function syncHeight() {
+                $placeholder.height($clone.outerHeight() + 40);
+            }
+        });
+    }
+
+    function initReadyForL10N() {
+        var $watchDiv = $("#revision-list div.l10n"),
+            post_url, checkbox_id;
+
+        $watchDiv.find("a.markasready").click(function() {
+            var $check = $(this);
+            post_url = $check.data("url");
+            checkbox_id = $check.attr("id");
+            $("#ready-for-l10n-modal span.revtime").html("("+$check.data("revdate")+")");
+        });
+
+        $("#ready-for-l10n-modal input[type=submit]").click(function() {
+            var csrf = $("#ready-for-l10n-modal input[name=csrfmiddlewaretoken]").val(),
+            kbox = $("#ready-for-l10n-modal").data("kbox");
+            if(post_url != undefined && checkbox_id != undefined) {
+                $.ajax({
+                    type: "POST",
+                    url: post_url,
+                    data: {csrfmiddlewaretoken: csrf},
+                    success: function(response) {
+                        $("#" + checkbox_id).removeClass("markasready").addClass("yes");
+                        $("#" + checkbox_id).unbind("click");
+                        kbox.close();
+                    },
+                    error: function() {
+                        kbox.close();
+                    }
+                });
             }
         });
     }

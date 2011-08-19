@@ -1,5 +1,6 @@
 {# vim: set ts=2 et sts=2 sw=2: #}
 {% extends "kbforums/base.html" %}
+{% from "kbforums/includes/macros.html" import kbforums_warning with context %}
 {# L10n: {d} is the name of the document. #}
 {% set title = _('{d} Discussion | Knowledge Base')|f(d=document.title) %}
 {% set crumbs = [(url('wiki.category', document.category), document.get_category_display()),
@@ -8,6 +9,7 @@
 
 {% block content %}
 <article id="threads" class="main">
+  {{ kbforums_warning(document, user) }}
   <h1>{{ _('{d} Discussion')|f(d=document.title) }}</h1>
   <div class="badges">
     {% if is_watching_forum %}<span class="watching">{{ _('Watching') }}</span>{% endif %}
@@ -23,7 +25,7 @@
           {% set watch = _('Watch this forum') %}
           <input type="hidden" name="watch" value="yes" />
         {% endif %}
-        <input type="image" alt="{{ watch }}" title="{{ watch }}" src="{{ MEDIA_URL }}img/forums/watch.png"/>
+        <input type="image" alt="{{ watch }}" title="{{ watch }}" class="watchtoggle" src="{{ MEDIA_URL }}img/forums/watch.png"/>
       </form>
     {% endif %}
     <a id="new-thread" href="{{ url('wiki.discuss.new_thread', document_slug=document.slug) }}">{{ _('Post a new thread') }}</a>

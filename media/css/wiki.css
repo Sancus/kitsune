@@ -128,88 +128,16 @@ article #toc ul li {
     width: 235px;
 }
 
+body.new-header #more-help div.support-search {
+    width: 240px;
+}
+
 #more-help div.support-search form {
     margin: 15px 0 0;
 }
 
 #more-help div.support-search input.text {
-    width: 146px;
-}
-
-#support-for {
-    margin: 30px 0 0 50px;
-}
-
-.js #support-for select {
-    visibility: hidden;
-}
-
-#support-for h1 {
-    color: #333;
-    font-size: 18px;
-    font-style: italic;
-    margin: 0 0 5px;
-    padding: 0 0 0 5px;
-}
-
-#support-for input {
-    background: transparent url(../img/wiki/bkg.showfor.selector.gif) no-repeat 6px 5px;
-    border: none;
-    color: #32559b;
-    cursor: pointer;
-    font-size: 13px;
-    min-width: 90px;
-    padding: 2px 0 2px 20px;
-}
-
-#support-for div.selectbox-wrapper {
-    position: relative;
-}
-
-#support-for div.selectbox-wrapper ul {
-    background: #32559b;
-    border-radius: 10px;
-    -moz-border-radius: 10px;
-    -webkit-border-radius: 10px;
-    border-top-left-radius: 0;
-    -moz-border-radius-topleft: 0;
-    -webkit-border-top-left-radius: 0;
-    left: 0;
-    list-style: none;
-    padding: 10px 5px;
-    position: absolute;
-    top: 5px;
-    width: 130px;
-}
-
-#support-for div.selectbox-wrapper ul:after {
-    background: #32559b;
-    content: '';
-    display: block;
-    height: 15px;
-    left: 3px;
-    position: absolute;
-    -moz-transform:rotate(45deg);
-    -webkit-transform:rotate(45deg);
-    top: -6px;
-    width: 15px;
-    z-index: 1;
-}
-
-#support-for div.selectbox-wrapper li {
-    color: #6fbcff;
-    cursor: pointer;
-    padding: 2px 0 2px 15px;
-    position: relative;
-}
-
-#support-for div.selectbox-wrapper li.selected {
-    background: transparent url(../img/wiki/bkg.showfor.selector.gif) no-repeat 2px -44px;
-    color: #fff;
-}
-
-#support-for div.selectbox-wrapper li.current {
-    color: #fff;
+    width: 144px;
 }
 
 #doc-contributors {
@@ -276,46 +204,6 @@ article #toc ul li {
     top: 3px;
 }
 
-div.message-box {
-    background: #32559b;
-    border-radius: 10px;
-    -moz-border-radius: 10px;
-    -webkit-border-radius: 10px;
-    box-shadow: 0 2px 2px rgba(0,0,0,.4);
-    -moz-box-shadow: 0 2px 2px rgba(0,0,0,.4);
-    -webkit-box-shadow: 0 2px 2px rgba(0,0,0,.4);
-    color: #fff;
-    font-family: Georgia;
-    font-size: 14px;
-    left: 0;
-    padding: 7px 20px;
-    position: absolute;
-    top: 0;
-}
-
-div.message-box p {
-    position: relative;
-    z-index: 2;
-}
-
-div.message-box:after {
-    background: #32559b;
-    box-shadow: 2px 2px 2px rgba(0,0,0,.4);
-    -moz-box-shadow: 2px 2px 2px rgba(0,0,0,.4);
-    -webkit-box-shadow: 2px 2px 2px rgba(0,0,0,.4);
-    content: '';
-    display: block;
-    height: 20px;
-    left: 50%;
-    margin-left: -20px;
-    position: absolute;
-    -moz-transform:rotate(45deg);
-    -webkit-transform:rotate(45deg);
-    top: 20px;
-    width: 20px;
-    z-index: 1;
-}
-
 /* New / Edit / Translate Document */
 #document-form form {
     padding: 0 0 20px;
@@ -372,12 +260,14 @@ article.form-page form li label {
 }
 
 #document-form label[for="id_is_localizable"],
-#document-form label[for="id_is_archived"] {
+#document-form label[for="id_is_archived"],
+#document-form label[for="id_allow_discussion"] {
     display: inline;
 }
 
 #document-form #id_is_localizable,
-#document-form #id_is_archived {
+#document-form #id_is_archived,
+#document-form #id_allow_discussion {
     margin: 0 .5em;
 }
 
@@ -573,12 +463,24 @@ details.h2 > summary {
 .choice-list li {
     display: inline-block;
     list-style: none;
-    padding: 0 5px;
+    padding: 0 8px;
     font-weight: bold;
 }
 
 .choice-list li a {
     font-weight: normal;
+}
+
+#helpful-chart {
+    display: none;
+    height: 400px;
+    width: 100%;
+}
+
+#chart-footnote {
+    color: #ABABAB;
+    font-size: 10px;
+    text-align: right;
 }
 
 #revision-list form {
@@ -587,6 +489,7 @@ details.h2 > summary {
 
 #revision-list ul {
     margin: 5px 0;
+    text-align: left;
 }
 
 #revision-list li {
@@ -609,59 +512,118 @@ details.h2 > summary {
     font-weight: bold;
 }
 
+#revision-list li.graph-hover {
+    background: #f6f6ad;
+}
+
 #revision-list li.rejected *,
 #revision-list li.rejected div.creator {
     color: #999;
     text-decoration: line-through;
 }
 
-#revision-list div.radio {
+#revision-list li.header * {
+    color: #666 !important;
+    font-weight: bold;
+}
+
+#revision-list div.radio,
+#revision-list div.radio-head {
     display: inline-block;
     text-align: center;
     width: 15px;
 }
 
-#revision-list div.date {
+#revision-list div.date,
+#revision-list div.date-head {
     display: inline-block;
     padding: 0 0 0 10px;
     width: 115px;
 }
 
-#revision-list div.status {
+#revision-list div.status,
+#revision-list div.status-head {
     display: inline-block;
-    width: 80px;
+    width: 90px;
 }
 
 #revision-list div.status a {
     font-weight: bold;
 }
 
-#revision-list div.significance {
+#revision-list div.significance,
+#revision-list div.significance-head {
     display: inline-block;
     width: 35px;
 }
 
-#revision-list div.creator {
+#revision-list div.creator,
+#revision-list div.creator-head {
     color: #333;
     display: inline-block;
     width: 105px;
 }
 
-#revision-list div.comment {
+#revision-list div.comment,
+#revision-list div.comment-head {
     display: inline-block;
-    width: 230px;
+    width: 245px;
 }
 
+#revision-list div.l10n,
 #revision-list div.edit,
-#revision-list div.delete {
+#revision-list div.delete,
+#revision-list div.l10n-head,
+#revision-list div.edit-head,
+#revision-list div.delete-head {
     display: inline-block;
     text-align: center;
-    width: 50px;
+    text-decoration: none;
+    width: 25px;
+}
+
+#revision-list div.edit a {
+    background: url("../img/icons.actions.png") no-repeat scroll left -25px transparent;
+    display: inline-block;
+    height: 12px;
+    text-decoration: none;
+    width: 12px;
+}
+
+#revision-list div.delete a {
+    background: url("../img/icons.actions.png") no-repeat scroll left 0px transparent;
+    display: inline-block;
+    height: 12px;
+    width: 12px;
+}
+
+#revision-list div.l10n a.yes {
+    background: url("/media/img/wiki/icon-yes.gif") no-repeat scroll left top transparent;
+    display: inline-block;
+    height: 12px;
+    width: 12px;
+}
+
+#revision-list div.l10n a.markasready,
+#revision-list div.l10n a.no {
+    background: url("/media/img/wiki/icon-no.gif") no-repeat scroll left top transparent;
+    display: inline-block;
+    height: 12px;
+    width: 12px;
+}
+
+#revision-list div.l10n a.markasready:hover {
+    background: url("/media/img/wiki/icon-yes.gif") no-repeat scroll left top transparent;
+    cursor: pointer;
+    display: inline-block;
+    height: 12px;
+    width: 12px;
 }
 
 #revision-list div.compare {
     height: 20px;
     padding: 0 0 0 50px;
+    text-align: left;
 }
 
 #revision-list div.compare.top {
@@ -674,10 +636,26 @@ details.h2 > summary {
     padding-top: 10px;
 }
 
+#contributors {
+    margin: 30px 0;
+}
+#contributors h1 {
+    font-size: 18px;
+}
+
 #delete-doc {
     margin: 50px 0 0;
     padding: 0 10px 0 0;
     text-align: right;
+}
+
+#show-chart {
+    color: #447BC4;
+    cursor: pointer;
+    float: right;
+    font-family: Trebuchet MS, Helvetica, sans-serif;
+    font-size: 13px;
+    margin-top: 1px;
 }
 
 /* Revision page */
@@ -716,12 +694,23 @@ body.review #content-fields textarea {
     margin: 5px 0 0;
 }
 
+#approve-modal p {
+    margin: 0 0 10px;
+}
+
+#approve-modal p.warning {
+    background: #FFF9DB url(../img/wiki/bkg.warning.png) repeat-y left top;
+    padding: .5em 1em .5em 2em;
+}
+
 #approve-modal li {
     list-style: none;
-    padding: 2px 5px;
+    padding: 5px;
+    position: relative;
 }
 
 #approve-modal div.message,
+#approve-modal div.ready-for-l10n,
 #reject-modal div.message {
     margin: 10px 0;
 }
@@ -732,15 +721,46 @@ body.review #content-fields textarea {
     width: 350px;
 }
 
+#approve-modal li div.help-text {
+    background: #fff;
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 10px 10px rgba(0,0,0,.25), inset -1px -1px 1px rgba(0,0,0,.125), inset 1px 0 1px rgba(255,255,255,.25);
+    color: #000;
+    display: none;
+    left: 23px;
+    padding: 10px 15px;
+    position: absolute;
+    top: 20px;
+    z-index: 999;
+}
+
+#approve-modal li:hover {
+    border-radius: 10px 10px 0 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,.25), inset -1px -1px 1px rgba(0,0,0,.125), inset 1px 0 1px rgba(255,255,255,.25);
+}
+
+#approve-modal li:hover label {
+    position: relative;
+    z-index: 1000;
+}
+
+#approve-modal li:hover div.help-text {
+    display: block;
+}
+
 /* Revision diffs */
+div.revision-diff header {
+    margin: 20px 0 0;
+}
+
 div.revision-diff div {
     display: inline-block;
+    vertical-align: top;
     width: 364px;
 }
 
 div.revision-diff h3 {
     font-weight: bold;
-    margin: 20px 0 0;
 }
 
 div.revision-diff h4 {
@@ -748,36 +768,84 @@ div.revision-diff h4 {
     margin: 10px 0 0;
 }
 
-table.diff {
-    border: solid 1px #999;
-    clear: both;
-    font-family:Courier;
-    margin: 5px 0 15px;
-    width: 100%;
+div.revision-diff div.picker {
+    display: block;
+    padding: 0 10px 0 0;
+    text-align: right;
+    width: auto;
 }
 
-.diff_header {
-    background-color:#e0e0e0;
+#diff-picker-kbox {
+    width: 770px;
+}
+
+a.toggle-diff {
+    float: right;
+    margin: 0 10px 0 0;
+}
+
+table.diff {
+    background: #fff;
+    border: solid 1px #ccc;
+    clear: both;
+    font-family: Courier;
+    margin: 5px 0 15px;
+    text-align: left;
+    width: 98%;
+}
+
+table.diff.full {
+    box-shadow: 0 2px 10px rgba(0,0,0,.25), inset -1px -1px 1px rgba(0,0,0,.125), inset 1px 0 1px rgba(255,255,255,.25);
+    -moz-box-shadow: 0 2px 10px rgba(0,0,0,.25), inset -1px -1px 1px rgba(0,0,0,.125), inset 1px 0 1px rgba(255,255,255,.25);
+    -webkit-box-shadow: 0 2px 10px rgba(0,0,0,.25), inset -1px -1px 1px rgba(0,0,0,.125), inset 1px 0 1px rgba(255,255,255,.25);
+    left: 1%;
+    position: absolute;
+}
+
+table.diff.full td.text {
+    display: table-cell;
+    width: auto;
+}
+
+table.diff colgroup {
+    border: none;
+}
+
+table.diff tbody {
+    border: none;
+}
+
+table.diff tr:nth-child(odd) {
+    background: #f0f0f0;
+}
+
+td.diff_next {
+    background: #ccc;
+    padding: 0 1px;
 }
 
 td.diff_header {
+    color: #999;
+    padding: 0 5px 0 1px;
     text-align:right;
 }
 
-.diff_next {
-    background-color:#c0c0c0;
+td.text {
+    display: inline-block;
+    padding: 1px 5px;
+    width: 300px;
 }
 
 .diff_add {
-    background-color:#aaffaa;
+    background:#aaffaa;
 }
 
 .diff_chg {
-    background-color:#ffff77;
+    background:#ffff77;
 }
 
 .diff_sub {
-    background-color:#ffaaaa;
+    background:#ffaaaa;
 }
 
 /* Delete Document/Revision */
@@ -857,14 +925,11 @@ details {
 
 /* Make sure summary remains visible, and apply a pointer cursor upon hover to indicate it's a clickable element */
 .no-details details summary {
+    background: transparent url(../img/wiki/bkg.collapsibles.png) no-repeat 5px 5px;
     border-bottom: solid 1px #cadaeb;
     cursor: pointer;
     display: block;
     margin: 10px 0 30px;
-}
-
-.no-details details summary {
-    background: transparent url(../img/wiki/bkg.collapsibles.png) no-repeat 5px 5px;
     padding: 0 0 0 30px;
 }
 

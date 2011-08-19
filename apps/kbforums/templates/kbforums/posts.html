@@ -2,6 +2,7 @@
 {% extends "kbforums/base.html" %}
 {% from "layout/errorlist.html" import errorlist %}
 {% from "includes/common_macros.html" import content_editor %}
+{% from "kbforums/includes/macros.html" import kbforums_warning with context %}
 {# L10n: {t} is the title of the thread. {d} is the name of the document. #}
 {% set title = _('{t} | {d} Discussion | Knowledge Base')|f(t=thread.title, d=document.title) %}
 {% set crumbs = [(url('wiki.category', document.category), document.get_category_display()),
@@ -11,6 +12,7 @@
 
 {% block content %}
 <article id="posts" class="main">
+  {{ kbforums_warning(document, user) }}
   <h1>{{ thread.title }}</h1>
   <div class="badges">
     {% if thread.is_sticky %}<span class="sticky">{{ _('Sticky') }}</span>{% endif %}
@@ -28,10 +30,10 @@
           {% set watch = _('Watch this thread') %}
           <input type="hidden" name="watch" value="yes" />
         {% endif %}
-        <input type="image" alt="{{ watch }}" title="{{ watch }}" src="{{ MEDIA_URL }}img/forums/watch.png"/>
+        <input type="image" alt="{{ watch }}" title="{{ watch }}" class="watchtoggle" src="{{ MEDIA_URL }}img/forums/watch.png"/>
       </form>
     {% endif %}
-    {% if perms.kbforums.edit_thread or (thread.creator == request.user and not thread.is_locked) %}
+    {% if perms.kbforums.change_thread or (thread.creator == request.user and not thread.is_locked) %}
       <a href="{{ url('wiki.discuss.edit_thread', document.slug, thread.id) }}"><img src="{{ MEDIA_URL }}img/forums/edit.png" alt="{{ _('Edit') }}" title="{{ _('Edit') }}"/></a>
     {% endif %}
     {% if perms.kbforums.delete_thread %}

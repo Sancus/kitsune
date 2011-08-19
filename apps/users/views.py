@@ -1,9 +1,8 @@
 import os
 
 from django.conf import settings
-from django.contrib import auth
-from django.contrib.auth.forms import (PasswordResetForm, SetPasswordForm,
-                                       PasswordChangeForm)
+from django.contrib import auth, messages
+from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.http import HttpResponseRedirect, Http404
@@ -13,19 +12,23 @@ from django.utils.http import base36_to_int
 
 import jingo
 from session_csrf import anonymous_csrf
+from statsd import statsd
 from tidings.tasks import claim_watches
+from tower import ugettext as _
 
 from access.decorators import logout_required, login_required
-from questions.models import Question, CONFIRMED
+from questions.models import Question
 from sumo.decorators import ssl_required
 from sumo.urlresolvers import reverse
 from sumo.utils import get_next_url
 from upload.tasks import _create_image_thumbnail
 from users.backends import Sha256Backend  # Monkey patch User.set_password.
 from users.forms import (ProfileForm, AvatarForm, EmailConfirmationForm,
-                         AuthenticationForm, EmailChangeForm)
+                         AuthenticationForm, EmailChangeForm, SetPasswordForm,
+                         PasswordChangeForm)
 from users.models import Profile, RegistrationProfile, EmailChange
-from users.utils import handle_login, handle_register, try_send_email_with_form
+from users.utils import (handle_login, handle_register,
+                         try_send_email_with_form)
 
 
 @ssl_required
@@ -36,7 +39,14 @@ def login(request):
     form = handle_login(request)
 
     if request.user.is_authenticated():
-        return HttpResponseRedirect(next_url)
+        res = HttpResponseRedirect(next_url)
+        max_age = (None if settings.SESSION_EXPIRE_AT_BROWSER_CLOSE
+                        else settings.SESSION_COOKIE_AGE)
+        res.set_cookie(settings.SESSION_EXISTS_COOKIE,
+                       '1',
+                       secure=False,
+                       max_age=max_age)
+        return res
 
     return jingo.render(request, 'users/login.html',
                         {'form': form, 'next_url': next_url})
@@ -46,9 +56,12 @@ def login(request):
 def logout(request):
     """Log the user out."""
     auth.logout(request)
-    next_url = get_next_url(request) if 'next' in request.GET else ''
+    statsd.incr('user.logout')
 
-    return HttpResponseRedirect(next_url or reverse('home'))
+    next_url = get_next_url(request) if 'next' in request.GET else ''
+    res = HttpResponseRedirect(next_url or reverse('home'))
+    res.delete_cookie(settings.SESSION_EXISTS_COOKIE)
+    return res
 
 
 @ssl_required
@@ -65,19 +78,32 @@ def register(request):
 
 
 @anonymous_csrf  # This view renders a login form
-def activate(request, activation_key):
+def activate(request, activation_key, user_id=None):
     """Activate a User account."""
     activation_key = activation_key.lower()
-    account = RegistrationProfile.objects.activate_user(activation_key)
+
+    if user_id:
+        user = get_object_or_404(User, id=user_id)
+    else:
+        user = RegistrationProfile.objects.get_user(activation_key)
+
+    if user and user.is_active:
+        messages.add_message(
+            request, messages.INFO,
+            _(u'Your account is already activated, log in below.'))
+        return HttpResponseRedirect(reverse('users.login'))
+
+    account = RegistrationProfile.objects.activate_user(activation_key,
+                                                        request)
     my_questions = None
     form = AuthenticationForm()
     if account:
         # Claim anonymous watches belonging to this email
+        statsd.incr('user.activate')
         claim_watches.delay(account)
 
         my_questions = Question.uncached.filter(creator=account)
-        # TODO: remove this after dropping unconfirmed questions.
-        my_questions.update(status=CONFIRMED)
+
     return jingo.render(request, 'users/activate.html',
                         {'account': account, 'questions': my_questions,
                          'form': form})
@@ -163,8 +189,9 @@ def confirm_change_email(request, activation_key):
 
 def profile(request, user_id):
     user_profile = get_object_or_404(Profile, user__id=user_id)
+    groups = user_profile.user.groups.all()
     return jingo.render(request, 'users/profile.html',
-                        {'profile': user_profile})
+                        {'profile': user_profile, 'groups': groups})
 
 
 @login_required
@@ -208,7 +235,7 @@ def edit_avatar(request):
     if request.method == 'POST':
         # Upload new avatar and replace old one.
         old_avatar_path = None
-        if user_profile.avatar:
+        if user_profile.avatar and os.path.isfile(user_profile.avatar.path):
             # Need to store the path, not the file here, or else django's
             # form.is_valid() messes with it.
             old_avatar_path = user_profile.avatar.path
@@ -219,9 +246,10 @@ def edit_avatar(request):
             user_profile = form.save()
 
             content = _create_image_thumbnail(user_profile.avatar.path,
-                                              settings.AVATAR_SIZE)
+                                              settings.AVATAR_SIZE, pad=True)
+            # We want everything as .png
+            name = user_profile.avatar.name + ".png"
             # Delete uploaded avatar and replace with thumbnail.
-            name = user_profile.avatar.name
             user_profile.avatar.delete()
             user_profile.avatar.save(name, content, save=True)
             return HttpResponseRedirect(reverse('users.edit_profile'))

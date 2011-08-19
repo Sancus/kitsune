@@ -1,3 +1,5 @@
+import os
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.sites.models import Site
@@ -8,12 +10,12 @@ from nose.tools import eq_
 from pyquery import PyQuery as pq
 from tidings.tests import watch
 
-from questions.models import Question, CONFIRMED, UNCONFIRMED
-from sumo.tests import TestCase, LocalizingClient
+from questions.models import Question
+from sumo.tests import TestCase, LocalizingClient, send_mail_raise_smtp
 from sumo.urlresolvers import reverse
-from sumo.tests import send_mail_raise_smtp
-from users.models import RegistrationProfile, EmailChange
 from users import ERROR_SEND_EMAIL
+from users.models import Profile, RegistrationProfile, EmailChange
+from users.tests import profile, user
 
 
 class RegisterTests(TestCase):
@@ -42,7 +44,7 @@ class RegisterTests(TestCase):
         eq_(1, len(mail.outbox))
         assert mail.outbox[0].subject.find('Please confirm your') == 0
         key = RegistrationProfile.objects.all()[0].activation_key
-        assert mail.outbox[0].body.find('activate/%s' % key) > 0
+        assert mail.outbox[0].body.find('activate/%s/%s' % (u.id, key)) > 0
 
         # Now try to log in
         u.is_active = True
@@ -96,7 +98,7 @@ class RegisterTests(TestCase):
             'sumouser1234', 'testpass', 'sumouser@test.com')
         assert not user.is_active
         key = RegistrationProfile.objects.all()[0].activation_key
-        url = reverse('users.activate', args=[key])
+        url = reverse('users.activate', args=[user.id, key])
         response = self.client.get(url, follow=True)
         eq_(200, response.status_code)
         user = User.objects.get(pk=user.pk)
@@ -111,14 +113,15 @@ class RegisterTests(TestCase):
         user = RegistrationProfile.objects.create_inactive_user(
             'sumouser1234', 'testpass', 'sumouser@test.com')
         key = RegistrationProfile.objects.all()[0].activation_key
-        self.client.get(reverse('users.activate', args=[key]), follow=True)
+        self.client.get(reverse('users.activate', args=[user.id, key]),
+                        follow=True)
 
         # Watches are claimed.
         assert user.watch_set.exists()
 
     @mock.patch.object(Site.objects, 'get_current')
     def test_new_user_with_questions(self, get_current):
-        """Unconfirmed questions get confirmed with account confirmation."""
+        """The user's questions are mentioned on the confirmation page."""
         get_current.return_value.domain = 'su.mo.com'
         # TODO: remove this test once we drop unconfirmed questions.
         user = RegistrationProfile.objects.create_inactive_user(
@@ -126,12 +129,11 @@ class RegisterTests(TestCase):
 
         # Before we activate, let's create a question.
         q = Question.objects.create(title='test_question', creator=user,
-                                    content='test', status=UNCONFIRMED,
-                                    confirmation_id='$$$')
+                                    content='test')
 
         # Activate account.
         key = RegistrationProfile.objects.all()[0].activation_key
-        url = reverse('users.activate', args=[key])
+        url = reverse('users.activate', args=[user.id, key])
         response = self.client.get(url, follow=True)
         eq_(200, response.status_code)
 
@@ -139,7 +141,6 @@ class RegisterTests(TestCase):
         # Question is listed on the confirmation page.
         assert 'test_question' in response.content
         assert q.get_absolute_url() in response.content
-        eq_(CONFIRMED, q.status)
 
     def test_duplicate_username(self):
         response = self.client.post(reverse('users.register', locale='en-US'),
@@ -166,12 +167,40 @@ class RegisterTests(TestCase):
                                      'password2': 'bar'}, follow=True)
         self.assertContains(response, 'must match')
 
+    @mock.patch.object(Site.objects, 'get_current')
+    def test_active_user_activation(self, get_current):
+        """If an already active user tries to activate with a valid key,
+        we take them to login page and show message."""
+        get_current.return_value.domain = 'su.mo.com'
+        user = RegistrationProfile.objects.create_inactive_user(
+            'sumouser1234', 'testpass', 'sumouser@test.com')
+        user.is_active = True
+        user.save()
+        key = RegistrationProfile.objects.all()[0].activation_key
+        url = reverse('users.activate', args=[user.id, key])
+        response = self.client.get(url, follow=True)
+        eq_(200, response.status_code)
+        doc = pq(response.content)
+        eq_('Your account is already activated, log in below.',
+            doc('ul.user-messages').text())
+
+    @mock.patch.object(Site.objects, 'get_current')
+    def test_old_activation_url(self, get_current):
+        get_current.return_value.domain = 'su.mo.com'
+        user = RegistrationProfile.objects.create_inactive_user(
+            'sumouser1234', 'testpass', 'sumouser@test.com')
+        assert not user.is_active
+        key = RegistrationProfile.objects.all()[0].activation_key
+        url = reverse('users.old_activate', args=[key])
+        response = self.client.get(url, follow=True)
+        eq_(200, response.status_code)
+        user = User.objects.get(pk=user.pk)
+        assert user.is_active
+
 
 class ChangeEmailTestCase(TestCase):
     fixtures = ['users.json']
-
-    def setUp(self):
-        self.client = LocalizingClient()
+    client_class = LocalizingClient
 
     def test_redirect(self):
         """Test our redirect from old url to new one."""
@@ -256,3 +285,96 @@ class ChangeEmailTestCase(TestCase):
             doc('#main h1').text())
         u = User.objects.get(username='rrosario')
         eq_(old_email, u.email)
+
+
+class AvatarTests(TestCase):
+    def setUp(self):
+        self.u = user()
+        self.u.save()
+        self.p = profile(self.u)
+        self.client.login(username=self.u.username, password='testpass')
+
+    def tearDown(self):
+        p = Profile.uncached.get(user=self.u)
+        if os.path.exists(p.avatar.path):
+            os.unlink(p.avatar.path)
+
+    def test_upload_avatar(self):
+        assert not self.p.avatar, 'User has no avatar.'
+        with open('apps/upload/tests/media/test.jpg') as f:
+            url = reverse('users.edit_avatar', locale='en-US')
+            data = {'avatar': f}
+            r = self.client.post(url, data)
+        eq_(302, r.status_code)
+        p = Profile.uncached.get(user=self.u)
+        assert p.avatar, 'User has an avatar.'
+        assert p.avatar.path.endswith('.png')
+
+    def test_replace_missing_avatar(self):
+        """If an avatar is missing, allow replacing it."""
+        assert not self.p.avatar, 'User has no avatar.'
+        self.p.avatar = 'path/does/not/exist.jpg'
+        self.p.save()
+        assert self.p.avatar, 'User has a bad avatar.'
+        with open('apps/upload/tests/media/test.jpg') as f:
+            url = reverse('users.edit_avatar', locale='en-US')
+            data = {'avatar': f}
+            r = self.client.post(url, data)
+        eq_(302, r.status_code)
+        p = Profile.uncached.get(user=self.u)
+        assert p.avatar, 'User has an avatar.'
+        assert not p.avatar.path.endswith('exist.jpg')
+        assert p.avatar.path.endswith('.png')
+
+
+class SessionTests(TestCase):
+    client_class = LocalizingClient
+
+    def setUp(self):
+        self.u = user()
+        self.u.save()
+        self.client.logout()
+
+    # Need to set DEBUG = True for @ssl_required to not freak out.
+    @mock.patch.object(settings._wrapped, 'DEBUG', True)
+    def test_login_sets_extra_cookie(self):
+        """On login, set the SESSION_EXISTS_COOKIE."""
+        url = reverse('users.login')
+        res = self.client.post(url, {'username': self.u.username,
+                                     'password': 'testpass'})
+        assert settings.SESSION_EXISTS_COOKIE in res.cookies
+        c = res.cookies[settings.SESSION_EXISTS_COOKIE]
+        assert 'secure' not in c.output().lower()
+
+    @mock.patch.object(settings._wrapped, 'DEBUG', True)
+    def test_logout_deletes_cookie(self):
+        """On logout, delete the SESSION_EXISTS_COOKIE."""
+        url = reverse('users.logout')
+        res = self.client.get(url)
+        assert settings.SESSION_EXISTS_COOKIE in res.cookies
+        c = res.cookies[settings.SESSION_EXISTS_COOKIE]
+        assert '1970' in c['expires']
+
+    @mock.patch.object(settings._wrapped, 'DEBUG', True, create=True)
+    @mock.patch.object(settings._wrapped, 'SESSION_EXPIRE_AT_BROWSER_CLOSE',
+                       True, create=True)
+    def test_expire_at_browser_close(self):
+        """If SESSION_EXPIRE_AT_BROWSER_CLOSE, do expire then."""
+        url = reverse('users.login')
+        res = self.client.post(url, {'username': self.u.username,
+                                     'password': 'testpass'})
+        c = res.cookies[settings.SESSION_EXISTS_COOKIE]
+        eq_('', c['max-age'])
+
+    @mock.patch.object(settings._wrapped, 'DEBUG', True, create=True)
+    @mock.patch.object(settings._wrapped, 'SESSION_EXPIRE_AT_BROWSER_CLOSE',
+                       False, create=True)
+    @mock.patch.object(settings._wrapped, 'SESSION_COOKIE_AGE', 123,
+                       create=True)
+    def test_expire_in_a_long_time(self):
+        """If not SESSION_EXPIRE_AT_BROWSER_CLOSE, set an expiry date."""
+        url = reverse('users.login')
+        res = self.client.post(url, {'username': self.u.username,
+                                     'password': 'testpass'})
+        c = res.cookies[settings.SESSION_EXISTS_COOKIE]
+        eq_(123, c['max-age'])
