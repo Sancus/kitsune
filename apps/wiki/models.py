@@ -88,11 +88,11 @@ GROUPED_FIREFOX_VERSIONS = (
         # The first option is the default for {for} display. This should be the
         # newest version.
         VersionMetadata(1, _lazy(u'Thunderbird 3.1'),
-                        _lazy(u'Thunderbird 3.1'), 'tb31', 3.1999, True),
+                        _lazy(u'Thunderbird 3.1'), 'tb31', 3.1999, True, False),
         VersionMetadata(5, _lazy(u'Thunderbird 5'),
-                        _lazy(u'Thunderbird 5'), 'tb5', 5.9999, True),
+                        _lazy(u'Thunderbird 5'), 'tb5', 5.9999, True, False),
         VersionMetadata(6, _lazy(u'Thunderbird 6'),
-                        _lazy(u'Thunderbird 6'), 'tb6', 6.9999, False),)),)
+                        _lazy(u'Thunderbird 6'), 'tb6', 6.9999, False, False),)),)
 
 # Flattened:  # TODO: perhaps use optgroups everywhere instead
 FIREFOX_VERSIONS = tuple(chain(*[options for label, options in
@@ -102,18 +102,9 @@ FIREFOX_VERSIONS = tuple(chain(*[options for label, options in
 OsMetaData = namedtuple('OsMetaData', 'id, name, slug, is_default')
 GROUPED_OPERATING_SYSTEMS = (
     ((_lazy(u'Desktop OS:'), 'desktop'), (
-<<<<<<< HEAD
-        OsMetaData(1, _lazy(u'Windows'), 'win'),
-        OsMetaData(2, _lazy(u'Mac OS X'), 'mac'),
-        OsMetaData(3, _lazy(u'Linux'), 'linux'))),)
-=======
         OsMetaData(1, _lazy(u'Windows'), 'win', True),
         OsMetaData(2, _lazy(u'Mac OS X'), 'mac', False),
-        OsMetaData(3, _lazy(u'Linux'), 'linux', False))),
-    ((_lazy(u'Mobile OS:'), 'mobile'), (
-        OsMetaData(5, _lazy(u'Android'), 'android', True),
-        OsMetaData(4, _lazy(u'Maemo'), 'maemo', False))))
->>>>>>> tags/2011-08-16
+        OsMetaData(3, _lazy(u'Linux'), 'linux', False))),)
 
 # Flattened
 OPERATING_SYSTEMS = tuple(chain(*[options for label, options in
