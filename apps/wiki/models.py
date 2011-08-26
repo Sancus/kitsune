@@ -62,12 +62,12 @@ GROUPED_FIREFOX_VERSIONS = (
     ((_lazy(u'Desktop:'), 'desktop'), (
         # The first option is the default for {for} display. This should be the
         # newest version.
-        VersionMetadata(1, _lazy(u'Thunderbird 3.1'),
-                        _lazy(u'Thunderbird 3.1'), 'tb31', 3.1999, True),
+        VersionMetadata(6, _lazy(u'Thunderbird 6'),
+                        _lazy(u'Thunderbird 6'), 'tb6', 6.9999, True),
         VersionMetadata(5, _lazy(u'Thunderbird 5'),
                         _lazy(u'Thunderbird 5'), 'tb5', 5.9999, True),
-        VersionMetadata(6, _lazy(u'Thunderbird 6'),
-                        _lazy(u'Thunderbird 6'), 'tb6', 6.9999, False),)),)
+        VersionMetadata(1, _lazy(u'Thunderbird 3.1'),
+                        _lazy(u'Thunderbird 3.1'), 'tb31', 3.1999, True),)),)
                         
 # Flattened:  # TODO: perhaps use optgroups everywhere instead
 FIREFOX_VERSIONS = tuple(chain(*[options for label, options in
