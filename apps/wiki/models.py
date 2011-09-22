@@ -116,6 +116,15 @@ GROUPED_OPERATING_SYSTEMS = (
 OPERATING_SYSTEMS = tuple(chain(*[options for label, options in
                                   GROUPED_OPERATING_SYSTEMS]))
 
+# Products supported
+Product = namedtuple('Product', 'slug, name')  # slug is used for tag/topic
+PRODUCTS = (
+    Product('desktop', _lazy(u'Desktop')),
+    Product('mobile', _lazy(u'Mobile')),
+    Product('sync', _lazy(u'Sync')),
+    Product('FxHome', _lazy(u'Home')))
+PRODUCT_TAGS = [p.slug for p in PRODUCTS]
+
 
 REDIRECT_HTML = '<p>REDIRECT <a '  # how a redirect looks as rendered HTML
 REDIRECT_CONTENT = 'REDIRECT [[%s]]'
@@ -133,28 +142,6 @@ class SlugCollision(Exception):
 
 class _NotDocumentView(Exception):
     """A URL not pointing to the document view was passed to from_url()."""
-
-
-def _inherited(parent_attr, direct_attr):
-    """Return a descriptor delegating to an attr of the original document.
-
-    If `self` is a translation, the descriptor delegates to the attribute
-    `parent_attr` from the original document. Otherwise, it delegates to the
-    attribute `direct_attr` from `self`.
-
-    Use this only on a reference to another object, like a ManyToMany or a
-    ForeignKey. Using it on a normal field won't work well, as it'll preclude
-    the use of that field in QuerySet field lookups. Also, ModelForms that are
-    passed instance=this_obj won't see the inherited value.
-
-    """
-    getter = lambda self: (getattr(self.parent, parent_attr)
-                               if self.parent
-                           else getattr(self, direct_attr))
-    setter = lambda self, val: (setattr(self.parent, parent_attr,
-                                        val) if self.parent else
-                                setattr(self, direct_attr, val))
-    return property(getter, setter)
 
 
 class Document(NotificationsMixin, ModelBase, BigVocabTaggableMixin):
@@ -406,11 +393,6 @@ class Document(NotificationsMixin, ModelBase, BigVocabTaggableMixin):
     def language(self):
         return settings.LANGUAGES[self.locale.lower()]
 
-    # FF version and OS are hung off the original, untranslated document and
-    # dynamically inherited by translations:
-    firefox_versions = _inherited('firefox_versions', 'firefox_version_set')
-    operating_systems = _inherited('operating_systems', 'operating_system_set')
-
     def get_absolute_url(self):
         return reverse('wiki.document', locale=self.locale, args=[self.slug])
 
@@ -508,6 +490,11 @@ class Document(NotificationsMixin, ModelBase, BigVocabTaggableMixin):
                 user.has_perm('wiki.delete_document_{locale}'.format(
                               locale=self.locale)))
 
+    def allows_vote(self, request):
+        """Return whether `user` can vote on this document."""
+        return (not self.is_archived and self.current_revision and
+                not self.current_revision.has_voted(request))
+
     def translated_to(self, locale):
         """Return the translation of me to the given locale.
 
@@ -597,7 +584,10 @@ class Revision(ModelBase):
 
     created = models.DateTimeField(default=datetime.now)
     reviewed = models.DateTimeField(null=True)
+
+    # The significance of the initial revision of a document is NULL.
     significance = models.IntegerField(choices=SIGNIFICANCES, null=True)
+
     comment = models.CharField(max_length=255)
     reviewer = models.ForeignKey(User, related_name='reviewed_revisions',
                                  null=True)
@@ -614,7 +604,8 @@ class Revision(ModelBase):
 
     # Is both approved and marked as ready for translation (which will result
     # in the translation UI considering it when looking for the latest
-    # translatable version). If is_approved=False, this must be False.
+    # translatable version). If is_approved=False or this revision belongs to a
+    # non-default-language Document, this must be False.
     is_ready_for_localization = models.BooleanField(default=False)
 
     class Meta(object):
@@ -661,9 +652,7 @@ class Revision(ModelBase):
                     dict(locale=LOCALES[settings.WIKI_DEFAULT_LANGUAGE].native,
                          id=old.id))
 
-        # If not is_approved, can't be is_ready. TODO: think about using a
-        # single field with more states.
-        if not self.is_approved:
+        if not self.can_be_readied_for_localization():
             self.is_ready_for_localization = False
 
     def save(self, *args, **kwargs):
@@ -747,18 +736,14 @@ class Revision(ModelBase):
         if request.user.is_authenticated():
             qs = HelpfulVote.objects.filter(revision=self,
                                             creator=request.user)
-            qs_old = HelpfulVoteOld.objects.filter(document=self.document,
-                                            creator=request.user)  # Lazy.
         elif request.anonymous.has_id:
             anon_id = request.anonymous.anonymous_id
             qs = HelpfulVote.objects.filter(revision=self,
                                             anonymous_id=anon_id)
-            qs_old = HelpfulVoteOld.objects.filter(document=self.document,
-                                            anonymous_id=anon_id)  # Lazy.
         else:
             return False
 
-        return qs.exists() or qs_old.exists()
+        return qs.exists()
 
     def __unicode__(self):
         return u'[%s] %s #%s: %s' % (self.document.locale,
@@ -771,28 +756,15 @@ class Revision(ModelBase):
         return wiki_to_html(self.content, locale=self.document.locale,
                             doc_id=self.document.id)
 
-
-# FirefoxVersion and OperatingSystem map many ints to one Document. The
-# enumeration table of int-to-string is not represented in the DB because of
-# difficulty working DB-dwelling gettext keys into our l10n workflow.
-class FirefoxVersion(ModelBase):
-    """A Firefox version, version range, etc. used to categorize documents"""
-    item_id = models.IntegerField(choices=[(v.id, v.name) for v in
-                                           FIREFOX_VERSIONS])
-    document = models.ForeignKey(Document, related_name='firefox_version_set')
-
-    class Meta(object):
-        unique_together = ('item_id', 'document')
-
-
-class OperatingSystem(ModelBase):
-    """An operating system used to categorize documents"""
-    item_id = models.IntegerField(choices=[(o.id, o.name) for o in
-                                           OPERATING_SYSTEMS])
-    document = models.ForeignKey(Document, related_name='operating_system_set')
-
-    class Meta(object):
-        unique_together = ('item_id', 'document')
+    def can_be_readied_for_localization(self):
+        """Return whether this revision has the prerequisites necessary for the
+        user to mark it as ready for localization."""
+        # If not is_approved, can't be is_ready. TODO: think about using a
+        # single field with more states.
+        # Also, if significance is trivial, it shouldn't be translated.
+        return (self.is_approved and
+                self.significance > TYPO_SIGNIFICANCE and
+                self.document.locale == settings.WIKI_DEFAULT_LANGUAGE)
 
 
 class HelpfulVote(ModelBase):
@@ -801,16 +773,6 @@ class HelpfulVote(ModelBase):
     helpful = models.BooleanField(default=False)
     created = models.DateTimeField(default=datetime.now, db_index=True)
     creator = models.ForeignKey(User, related_name='poll_votes', null=True)
-    anonymous_id = models.CharField(max_length=40, db_index=True)
-    user_agent = models.CharField(max_length=1000)
-
-
-class HelpfulVoteOld(ModelBase):
-    """Helpful or Not Helpful vote on Revision."""
-    document = models.ForeignKey(Document, related_name='poll_votes_doc')
-    helpful = models.BooleanField(default=False)
-    created = models.DateTimeField(default=datetime.now, db_index=True)
-    creator = models.ForeignKey(User, related_name='poll_votes_doc', null=True)
     anonymous_id = models.CharField(max_length=40, db_index=True)
     user_agent = models.CharField(max_length=1000)
 

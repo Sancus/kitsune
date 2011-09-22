@@ -3,10 +3,12 @@ from datetime import datetime
 from nose.tools import eq_
 
 from dashboards.readouts import (UnreviewedReadout, OutOfDateReadout,
-                                 TemplateTranslationsReadout,
-                                 MostVisitedTranslationsReadout)
+                                 TemplateTranslationsReadout, overview_rows,
+                                 MostVisitedTranslationsReadout,
+                                 UnreadyForLocalizationReadout)
 from sumo.tests import TestCase
-from wiki.models import MAJOR_SIGNIFICANCE, MEDIUM_SIGNIFICANCE
+from wiki.models import (MAJOR_SIGNIFICANCE, MEDIUM_SIGNIFICANCE,
+                         TYPO_SIGNIFICANCE)
 from wiki.tests import revision, translated_revision, document
 
 
@@ -25,6 +27,44 @@ class ReadoutTestCase(TestCase):
         """Return the titles shown by the Unreviewed Changes readout."""
         return [row['title'] for row in
                 self.readout(MockRequest()).rows()]
+
+
+class OverviewTests(TestCase):
+    """Tests for Overview readout"""
+    def test_counting_unready_templates(self):
+        """Templates without a ready-for-l10n rev shouldn't count in total."""
+        # Make a template with an approved but not-ready-for-l10n rev:
+        r = revision(document=document(title='Template:smoo',
+                                       is_localizable=True,
+                                       is_template=True,
+                                       save=True),
+                     is_ready_for_localization=False,
+                     is_approved=True,
+                     save=True)
+
+        # It shouldn't show up in the total:
+        eq_(0, overview_rows('de')['templates']['denominator'])
+
+        r.is_ready_for_localization = True
+        r.save()
+        eq_(1, overview_rows('de')['templates']['denominator'])
+
+    def test_counting_unready_docs(self):
+        """Docs without a ready-for-l10n rev shouldn't count in total."""
+        # Make a doc with an approved but not-ready-for-l10n rev:
+        r = revision(document=document(title='smoo',
+                                       is_localizable=True,
+                                       save=True),
+                     is_ready_for_localization=False,
+                     is_approved=True,
+                     save=True)
+
+        # It shouldn't show up in the total:
+        eq_(0, overview_rows('de')['all']['denominator'])
+
+        r.is_ready_for_localization = True
+        r.save()
+        eq_(1, overview_rows('de')['all']['denominator'])
 
 
 class UnreviewedChangesTests(ReadoutTestCase):
@@ -207,3 +247,77 @@ class TemplateTranslationsTests(ReadoutTestCase):
         row = self.row()
         eq_(row['title'], untranslated.document.title)
         eq_(unicode(row['status']), 'Translation Needed')
+
+
+class UnreadyTests(ReadoutTestCase):
+    """Tests for UnreadyForLocalizationReadout"""
+
+    readout = UnreadyForLocalizationReadout
+
+    def test_no_approved_revs(self):
+        """Articles with no approved revisions should not appear."""
+        revision(is_approved=False,
+                 is_ready_for_localization=False,
+                 significance=MAJOR_SIGNIFICANCE,
+                 save=True)
+        eq_([], self.titles())
+
+    def test_unapproved_revs(self):
+        """Articles with only unreviewed or rejected revs after the latest
+        ready one should not appear."""
+        d = document(save=True)
+        ready = revision(document=d,
+                         is_approved=True,
+                         is_ready_for_localization=True,
+                         save=True)
+        unreviewed = revision(document=d,
+                              is_approved=False,
+                              reviewed=None,
+                              is_ready_for_localization=False,
+                              save=True)
+        rejected = revision(document=d,
+                            is_approved=False,
+                            reviewed=datetime.now(),
+                            is_ready_for_localization=False,
+                            save=True)
+        eq_([], self.titles())
+
+    def test_first_rev(self):
+        """If an article's first revision is approved, show the article.
+
+        This also conveniently tests that documents with no
+        latest_localizable_revision are not necessarily excluded.
+
+        """
+        r = revision(is_approved=True,
+                     reviewed=datetime.now(),
+                     is_ready_for_localization=False,
+                     significance=None,
+                     save=True)
+        eq_([r.document.title], self.titles())
+
+    def test_insignificant_revs(self):
+        """Articles with approved, unready, but insignificant revisions newer
+        than their latest ready-for-l10n ones should not appear."""
+        ready = revision(is_approved=True,
+                         is_ready_for_localization=True,
+                         save=True)
+        insignificant = revision(document=ready.document,
+                                 is_approved=True,
+                                 is_ready_for_localization=False,
+                                 significance=TYPO_SIGNIFICANCE,
+                                 save=True)
+        eq_([], self.titles())
+
+    def test_significant_revs(self):
+        """Articles with approved, significant, but unready revisions newer
+        than their latest ready-for-l10n ones should appear."""
+        ready = revision(is_approved=True,
+                         is_ready_for_localization=True,
+                         save=True)
+        significant = revision(document=ready.document,
+                               is_approved=True,
+                               is_ready_for_localization=False,
+                               significance=MEDIUM_SIGNIFICANCE,
+                               save=True)
+        eq_([ready.document.title], self.titles())
