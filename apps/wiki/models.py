@@ -88,11 +88,11 @@ GROUPED_FIREFOX_VERSIONS = (
         # The first option is the default for {for} display. This should be the
         # newest version.
         VersionMetadata(6, _lazy(u'Thunderbird 6'),
-                        _lazy(u'Thunderbird 6'), 'tb6', 6.9999, True, True),
+                        _lazy(u'Thunderbird 6'), 'tb6', 6.9999, True, False),
         VersionMetadata(5, _lazy(u'Thunderbird 5'),
                         _lazy(u'Thunderbird 5'), 'tb5', 5.9999, True, False),
         VersionMetadata(7, _lazy(u'Thunderbird 7'),
-                        _lazy(u'Thunderbird 7'), 'tb7', 7.9999, True, False),
+                        _lazy(u'Thunderbird 7'), 'tb7', 7.9999, True, True),
         VersionMetadata(8, _lazy(u'Thunderbird 8'),
                         _lazy(u'Thunderbird 8'), 'tb8', 8.9999, True, False),
         VersionMetadata(9, _lazy(u'Thunderbird 9'),
