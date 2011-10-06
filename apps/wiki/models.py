@@ -119,10 +119,7 @@ OPERATING_SYSTEMS = tuple(chain(*[options for label, options in
 # Products supported
 Product = namedtuple('Product', 'slug, name')  # slug is used for tag/topic
 PRODUCTS = (
-    Product('desktop', _lazy(u'Desktop')),
-    Product('mobile', _lazy(u'Mobile')),
-    Product('sync', _lazy(u'Sync')),
-    Product('FxHome', _lazy(u'Home')))
+    Product('Thunderbird', _lazy(u'Thunderbird')),)
 PRODUCT_TAGS = [p.slug for p in PRODUCTS]
 
 
