@@ -61,10 +61,10 @@ var ShowFor = {
             $browserMenu = $container.find(options.browserSelector),
             $origBrowserOptions = $browserMenu.find('option').clone(),
             defaults = {
-                mobile: {
+                /*mobile: {
                     browser: $origBrowserOptions.filter('[data-dependency="mobile"][data-default]').val(),
                     os: $osMenu.find('[data-dependency="mobile"][data-default]').val()
-                },
+                },*/
                 desktop: {
                     browser: $origBrowserOptions.filter('[data-dependency="desktop"][data-default]').val(),
                     os: $osMenu.find('[data-dependency="desktop"][data-default]').val()
@@ -217,12 +217,12 @@ var ShowFor = {
                              // If the current selection is desktop:
                              // * Show the default mobile OS if no browser was specified or
                              //   the default mobile browser was also specified.
-                             !(osAttrs[defaults.mobile.os] && platform === 'desktop' &&
-                                (meetsAnyOfConditions(defaults.mobile.browser, browserConditions) || !foundAnyBrowsers)) &&
+                             //!(osAttrs[defaults.mobile.os] && platform === 'desktop' &&
+                             //   (meetsAnyOfConditions(defaults.mobile.browser, browserConditions) || !foundAnyBrowsers)) &&
                              // * Show the default mobile browser if no OS was specified or
                              //   the default mobile OS was also specified.
-                             !(meetsAnyOfConditions(defaults.mobile.browser, browserConditions) && platform === 'desktop' &&
-                                (osAttrs[defaults.mobile.os] || !foundAnyOses)) &&
+                             //!(meetsAnyOfConditions(defaults.mobile.browser, browserConditions) && platform === 'desktop' &&
+                             //   (osAttrs[defaults.mobile.os] || !foundAnyOses)) &&
                              // If the current selection is mobile:
                              // * Show the default desktop OS if no browser was specified or
                              //   the default desktop browser was also specified.
