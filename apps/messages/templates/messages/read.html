@@ -1,0 +1,21 @@
+{% extends "messages/base.html" %}
+{% from "messages/includes/macros.html" import inbox_message with context %}
+{% set title = _('Read Message') %}
+{% set crumbs = [(url('messages.inbox'), _('Messages')),
+                 (None, title)] %}
+
+{% block content %}
+  <article id="read-message" class="main message-view">
+    <h1>{{ title }}</h1>
+    {{ inbox_message(message) }}
+    {% if message.sender %}
+      <form class="reply" action="{{ url('messages.new') }}" method="POST">
+        {{ csrf() }}
+        <ul>
+          {{ form.as_ul()|safe }}
+        </ul>
+        <input type="submit" value="{{ _('Reply') }}" />
+      </form>
+    {% endif %}
+  </article>
+{% endblock %}

@@ -3,15 +3,15 @@ import re
 
 from django import forms
 from django.utils.encoding import smart_str
+from django.utils.safestring import mark_safe
 
 from tower import ugettext_lazy as _lazy
 
-from sumo.form_fields import StrippedCharField
+from sumo.form_fields import MultiUsernameField, StrippedCharField
 from tags import forms as tag_forms
-from wiki.models import (Document, Revision, FirefoxVersion, OperatingSystem,
-                     FIREFOX_VERSIONS, OPERATING_SYSTEMS, SIGNIFICANCES,
-                     GROUPED_FIREFOX_VERSIONS, GROUPED_OPERATING_SYSTEMS,
-                     CATEGORIES)
+from wiki.models import (Document, Revision, PRODUCTS, PRODUCT_TAGS,
+                         SIGNIFICANCES_HELP, GROUPED_FIREFOX_VERSIONS,
+                         SIGNIFICANCES, GROUPED_OPERATING_SYSTEMS, CATEGORIES)
 
 
 TITLE_REQUIRED = _lazy(u'Please provide a title.')
@@ -56,12 +56,11 @@ class DocumentForm(forms.ModelForm):
         # Set up tags field, which is instantiated deep within taggit:
         tags_field = self.fields['tags']
         tags_field.widget.can_create_tags = can_create_tags
-        
+
         # If user hasn't permission to frob is_archived, remove the field. This
         # causes save() to skip it as well.
         if not can_archive:
             del self.fields['is_archived']
-
 
     title = StrippedCharField(
         min_length=5, max_length=255,
@@ -81,17 +80,10 @@ class DocumentForm(forms.ModelForm):
                         'min_length': SLUG_SHORT,
                         'max_length': SLUG_LONG})
 
-    firefox_versions = forms.MultipleChoiceField(
-        label=_lazy(u'Firefox version:'),
-        choices=[(v.id, v.long) for v in FIREFOX_VERSIONS],
-        initial=[v.id for v in GROUPED_FIREFOX_VERSIONS[0][1]],
-        required=False,
-        widget=forms.CheckboxSelectMultiple())
-
-    operating_systems = forms.MultipleChoiceField(
-        label=_lazy(u'Operating systems:'),
-        choices=[(o.id, o.name) for o in OPERATING_SYSTEMS],
-        initial=[o.id for o in GROUPED_OPERATING_SYSTEMS[0][1]],
+    products = forms.MultipleChoiceField(
+        label=_lazy(u'Relevant to:'),
+        choices=PRODUCTS,
+        initial=[PRODUCTS[0][0]],
         required=False,
         widget=forms.CheckboxSelectMultiple())
 
@@ -102,6 +94,11 @@ class DocumentForm(forms.ModelForm):
 
     is_archived = forms.BooleanField(
         label=_lazy(u'Obsolete:'),
+        required=False)
+
+    allow_discussion = forms.BooleanField(
+        label=_lazy(u'Allow discussion on this article?'),
+        initial=True,
         required=False)
 
     category = forms.ChoiceField(
@@ -126,18 +123,10 @@ class DocumentForm(forms.ModelForm):
             raise forms.ValidationError(SLUG_INVALID)
         return slug
 
-    def clean_firefox_versions(self):
-        data = self.cleaned_data['firefox_versions']
-        return [FirefoxVersion(item_id=int(x)) for x in data]
-
-    def clean_operating_systems(self):
-        data = self.cleaned_data['operating_systems']
-        return [OperatingSystem(item_id=int(x)) for x in data]
-
     class Meta:
         model = Document
-        fields = ('title', 'slug', 'category', 'is_localizable', 'is_archived',
-                  'tags', 'locale')
+        fields = ('title', 'slug', 'category', 'is_localizable', 'products',
+                  'tags', 'locale', 'is_archived', 'allow_discussion')
 
     def save(self, parent_doc, **kwargs):
         """Persist the Document form, and return the saved Document."""
@@ -148,12 +137,11 @@ class DocumentForm(forms.ModelForm):
                          # any m2m data since we instantiated the doc
 
         if not parent_doc:
-            ffv = self.cleaned_data['firefox_versions']
-            doc.firefox_versions.all().delete()
-            doc.firefox_versions = ffv
-            os = self.cleaned_data['operating_systems']
-            doc.operating_systems.all().delete()
-            doc.operating_systems = os
+            # Set the products as tags.
+            # products are not set on the translations.
+            prods = self.cleaned_data['products']
+            doc.tags.add(*prods)
+            doc.tags.remove(*[p for p in PRODUCT_TAGS if p not in prods])
 
         return doc
 
@@ -214,12 +202,50 @@ class RevisionForm(forms.ModelForm):
         return new_rev
 
 
+class RadioInputWithHelpText(forms.widgets.RadioInput):
+    """Extend django's RadioInput with some <div class="help-text" />."""
+    # NOTE: I tried to have the help text be part of the choices tuple,
+    # but it caused all sorts of validation errors in django. For now,
+    # just using SIGNIFICANCES_HELP directly here.
+    def __init__(self, name, value, attrs, choice, index):
+        super(RadioInputWithHelpText, self).__init__(name, value, attrs,
+                                                     choice, index)
+        self.choice_help = SIGNIFICANCES_HELP[choice[0]]
+
+    def __unicode__(self):
+        label = super(RadioInputWithHelpText, self).__unicode__()
+        return mark_safe('%s<div class="help-text">%s</div>' %
+                         (label, self.choice_help))
+
+
+class RadioFieldRendererWithHelpText(forms.widgets.RadioFieldRenderer):
+    """Modifies django's RadioFieldRenderer to use RadioInputWithHelpText."""
+    def __iter__(self):
+        for i, choice in enumerate(self.choices):
+            yield RadioInputWithHelpText(self.name, self.value,
+                                         self.attrs.copy(), choice, i)
+
+
 class ReviewForm(forms.Form):
     comment = StrippedCharField(max_length=255, widget=forms.Textarea(),
                                 required=False, label=_lazy(u'Comment:'),
                                 error_messages={'max_length': COMMENT_LONG})
 
+    _widget = forms.RadioSelect(renderer=RadioFieldRendererWithHelpText)
     significance = forms.ChoiceField(
                     label=_lazy(u'Significance:'),
-                    choices=SIGNIFICANCES, initial=SIGNIFICANCES[0][0],
-                    required=False, widget=forms.RadioSelect())
+                    choices=SIGNIFICANCES,
+                    initial=SIGNIFICANCES[0][0],
+                    required=False, widget=_widget)
+
+    is_ready_for_localization = forms.BooleanField(
+        initial=False,
+        label=_lazy(u'Ready for localization'),
+        required=False)
+
+
+class AddContributorForm(forms.Form):
+    """Form to add contributors to a document."""
+    users = MultiUsernameField(
+        widget=forms.TextInput(attrs={'placeholder': _lazy(u'username'),
+                                      'class': 'user-autocomplete'}))

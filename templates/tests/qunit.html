@@ -2,8 +2,8 @@
 <html>
 <head>
 	<title>QUnit Test Suite</title>
-  <link rel="stylesheet" href="{{ url('qunit_css') }}" type="text/css" media="screen">
-  <link rel="stylesheet" href="{{ MEDIA_URL }}css/kbox.css" type="text/css" media="screen">
+  <link rel="stylesheet" href="{{ url('qunit_css') }}?v={{ timestamp }}" type="text/css" media="screen">
+  <link rel="stylesheet" href="{{ MEDIA_URL }}css/kbox.css?v={{ timestamp }}" type="text/css" media="screen">
 </head>
 <body
   data-for-os="{&#34;maemo&#34;: 4, &#34;win&#34;: 1, &#34;mac&#34;: 2, &#34;android&#34;: 5, &#34;linux&#34;: 3}"
@@ -46,18 +46,21 @@
     <div id="showfor">
       <div class="help-with-selects">
         <select class="os" data-oses="{&#34;maemo&#34;: true, &#34;win&#34;: true, &#34;mac&#34;: true, &#34;android&#34;: true, &#34;linux&#34;: true}">
-          <option value="win" data-dependency="desktop">Windows</option>
+          <option value="win" data-dependency="desktop" data-default="true">Windows</option>
           <option value="mac" data-dependency="desktop">Mac OS X</option>
           <option value="linux" data-dependency="desktop">Linux</option>
-          <option value="android" data-dependency="mobile">Android</option>
+          <option value="android" data-dependency="mobile" data-default="true">Android</option>
           <option value="maemo" data-dependency="mobile">Maemo</option>
         </select>
-        <select class="browser" data-browsers="{&#34;fx4&#34;: true, &#34;fx3&#34;: false, &#34;fx35&#34;: true, &#34;m4&#34;: true}" data-version-groups="{&#34;fx&#34;: [[3.4998999999999998, &#34;3&#34;], [3.9998999999999998, &#34;35&#34;], [4.9999000000000002, &#34;4&#34;]], &#34;m&#34;: [[4.9999000000000002, &#34;4&#34;]]}">
+        <select class="browser" data-browsers="{&#34;fx5&#34;: {&#34;product&#34;: &#34;fx&#34;, &#34;maxFloatVersion&#34;: 5.9999000000000002}, &#34;fx4&#34;: {&#34;product&#34;: &#34;fx&#34;, &#34;maxFloatVersion&#34;: 4.9999000000000002}, &#34;fx6&#34;: {&#34;product&#34;: &#34;fx&#34;, &#34;maxFloatVersion&#34;: 6.9999000000000002}, &#34;fx3&#34;: {&#34;product&#34;: &#34;fx&#34;, &#34;maxFloatVersion&#34;: 3.4998999999999998}, &#34;m5&#34;: {&#34;product&#34;: &#34;m&#34;, &#34;maxFloatVersion&#34;: 5.9999000000000002}, &#34;m4&#34;: {&#34;product&#34;: &#34;m&#34;, &#34;maxFloatVersion&#34;: 4.9999000000000002}, &#34;m6&#34;: {&#34;product&#34;: &#34;m&#34;, &#34;maxFloatVersion&#34;: 6.9999000000000002}, &#34;fx35&#34;: {&#34;product&#34;: &#34;fx&#34;, &#34;maxFloatVersion&#34;: 3.9998999999999998}}" data-version-groups="{&#34;fx&#34;: [[3.4998999999999998, &#34;3&#34;], [3.9998999999999998, &#34;35&#34;], [4.9999000000000002, &#34;4&#34;], [5.9999000000000002, &#34;5&#34;], [6.9999000000000002, &#34;6&#34;]], &#34;m&#34;: [[4.9999000000000002, &#34;4&#34;], [5.9999000000000002, &#34;5&#34;], [6.9999000000000002, &#34;6&#34;]]}">
           <optgroup label="Desktop:">
-            <option value="fx35" data-dependency="desktop">Firefox 3.5-3.6</option>
+            <option value="fx6" data-dependency="desktop">Firefox 6</option>
+            <option value="fx5" data-dependency="desktop" selected="selected" data-default="true">Firefox 5</option>
             <option value="fx4" data-dependency="desktop">Firefox 4</option>
+            <option value="fx35" data-dependency="desktop">Firefox 3.5-3.6</option>
           </optgroup>
           <optgroup label="Mobile:">
+            <option value="m5" data-dependency="mobile" data-default="true">Firefox 5</option>
             <option value="m4" data-dependency="mobile">Firefox 4</option>
           </optgroup>
         </select>
@@ -69,26 +72,39 @@
         <div class="for" data-for="android">android</div>
         <div class="for" data-for="maemo">maemo</div>
         <span class="for" data-for="fx35,fx4">fx35,fx4</span>
+        <span class="for" data-for="fx4">fx4</span>
         <span class="for" data-for="fx3">fx3</span>
+        <span class="for" data-for="fx5">fx5</span>
         <span class="for" data-for="m4">m4</span>
+        <span class="for" data-for="m5">m5</span>
       </div>
+    </div>
+
+    <div id="ajaxvote">
+      <form class="vote" action="/vote" method="post">
+        <input type="hidden" name="foo" value="bar" />
+        <input type="submit" name="helpful" value="Yes" />
+        <input type="submit" name="not-helpful" value="No" />
+      </form>
     </div>
   </div>
 
 
   <script src="{{ url('jsi18n') }}/build:{{ BUILD_ID_JS }}"></script>
-  <script src="{{ url('wafflejs') }}"></script>
-  {{ js('common') }}
-  <script type="text/javascript" src="{{ url('qunit_js') }}"></script>
-  <script type="text/javascript" src="{{ MEDIA_URL }}js/libs/jquery.mockjax.js"></script>
+  <script src="{{ url('wafflejs') }}?v={{ timestamp }}"></script>
+  {% for jsfile in settings.MINIFY_BUNDLES['js']['common'] %}
+    <script src="{{ MEDIA_URL + jsfile }}?v={{ timestamp }}"></script>
+  {% endfor %}
+  <script type="text/javascript" src="{{ url('qunit_js') }}?v={{ timestamp }}"></script>
+  <script type="text/javascript" src="{{ MEDIA_URL }}js/libs/jquery.mockjax.js?v={{ timestamp }}"></script>
   {% for url in suite.extra_urls %}
-    <script type="text/javascript" src="{{ url }}"></script>
+    <script type="text/javascript" src="{{ url }}?v={{ timestamp }}"></script>
   {% endfor %}
   {% for url in suite.extra_media_urls %}
-    <script type="text/javascript" src="{{ MEDIA_URL }}{{ url }}"></script>
+    <script type="text/javascript" src="{{ MEDIA_URL }}{{ url }}?v={{ timestamp }}"></script>
   {% endfor %}
   {% for file in files %}
-    <script type="text/javascript" src="{{ url('qunit_test', file) }}"></script>
+    <script type="text/javascript" src="{{ url('qunit_test', file) }}?v={{ timestamp }}"></script>
   {% endfor %}
 
 </body>

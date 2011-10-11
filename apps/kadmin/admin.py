@@ -1,6 +1,7 @@
 import re
 
 from django import http
+from django.conf import settings as django_settings
 from django.contrib import admin
 from django.db import connection
 from django.shortcuts import render_to_response
@@ -9,6 +10,9 @@ from django.views import debug
 
 import celery.conf
 import jinja2
+from redis import ConnectionError
+
+from sumo.utils import redis_client
 
 
 def settings(request):
@@ -60,3 +64,29 @@ def schema_version(request):
 
 admin.site.register_view('schema', schema_version,
                          'Database Schema Version')
+
+
+def redis_info(request):
+    """Admin view that displays redis INFO+CONFIG output for all backends."""
+    redis_info = {}
+    for key in django_settings.REDIS_BACKENDS.keys():
+        redis_info[key] = {}
+        client = redis_client(key)
+        redis_info[key]['connection'] = django_settings.REDIS_BACKENDS[key]
+        try:
+            cfg = client.config_get()
+            redis_info[key]['config'] = [{'key': k, 'value': cfg[k]} for k in
+                                         sorted(cfg)]
+            info = client.info()
+            redis_info[key]['info'] = [{'key': k, 'value': info[k]} for k in
+                                       sorted(info)]
+        except ConnectionError:
+            redis_info[key]['down'] = True
+
+    return render_to_response('kadmin/redis.html',
+                              {'redis_info': redis_info,
+                               'title': 'Redis Information'},
+                              RequestContext(request, {}))
+
+admin.site.register_view('redis', redis_info,
+                         'Redis Information')

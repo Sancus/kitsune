@@ -1,0 +1,61 @@
+{% macro avatar_link(user=None) -%}
+  {% if user %}
+    <a href="{{ profile_url(user) }}"><img src="{{ profile_avatar(user) }}" height="48" width="48" alt="{{ display_name(user) }}"></a>
+  {% else %}
+    <img src="{{ profile_avatar(user) }}" height="48" width="48" alt="{{ _('System') }}" />
+  {% endif %}
+{%- endmacro %}
+
+{% macro name_link(user=None, name=None) -%}
+  {% if user -%}
+    <a href="{{ profile_url(user) }}">{% if name %}{{ name }}{% else %}{{ display_name(user) }}{% endif %}</a>
+  {%- else -%}
+    {{ name if name else _('System') }}
+  {%- endif %}
+{%- endmacro %}
+
+{% macro message_tabs(active_tab) -%}
+  <nav id="doc-tabs">
+    <ul>
+      <li{% if active_tab == 'inbox' %} class="active"{% endif %}>
+        <a href="{{ url('messages.inbox') }}">{{ _('Messages') }}</a>
+      </li>
+      <li{% if active_tab == 'outbox' %} class="active"{% endif %}>
+        <a href="{{ url('messages.outbox') }}">{{ _('Sent Messages') }}</a>
+      </li>
+      <li{% if active_tab == 'new' %} class="active"{% endif %}>
+        <a href="{{ url('messages.new') }}">{{ _('New Message') }}</a>
+      </li>
+    </ul>
+  </nav>
+{%- endmacro %}
+
+{% macro inbox_message(message) -%}
+  <span class="avatar">{{ avatar_link(message.sender) }}</span>
+  <span class="from">{{ name_link(message.sender) }} {{ datetimeformat(message.created) }}</span>
+  <div class="message">{{ message.content_parsed }}</div>
+{%- endmacro %}
+
+
+{% macro outbox_message(message) -%}
+  <span class="avatar">
+    {% if message.recipients > 1 -%}
+      {{ avatar_link(request.user) }}
+    {% else %}
+      {{ avatar_link(message.recipient) }}
+    {% endif %}
+  </span>
+  <span class="to">
+    {% if message.recipients > 1 -%}
+      {% set comma = joiner(', ') %}
+      {% for user in message.to.all() -%}
+        {{ comma() }}
+        {{ name_link(user) }}
+      {%- endfor %}
+    {% else %}{# Save a query! #}
+      {{ name_link(message.recipient) }}
+    {% endif %}
+    {{ datetimeformat(message.created) }}
+  </span>
+  <div class="message">{{ message.content_parsed }}</div>
+{%- endmacro %}

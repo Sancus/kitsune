@@ -1,9 +1,17 @@
+import logging
+import time
+
 from django.db import connection, transaction
 
 import cronjobs
+from multidb.pinning import use_master
+from statsd import statsd
 import waffle
 
 from wiki import tasks
+
+
+log = logging.getLogger('k.migratehelpful')
 
 
 @cronjobs.register
@@ -51,7 +59,8 @@ def calculate_related_documents():
             d2.locale = d1.locale AND
             d2.category = d1.category AND
             d1.current_revision_id IS NOT NULL AND
-            d2.current_revision_id IS NOT NULL
+            d2.current_revision_id IS NOT NULL AND
+            d2.is_archived = 0
         GROUP BY
             t1.object_id,
             t2.object_id""")
@@ -65,3 +74,5 @@ def rebuild_kb():
         return
 
     tasks.rebuild_kb()
+
+

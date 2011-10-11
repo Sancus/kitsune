@@ -23,7 +23,7 @@ from questions.models import Question
 import search as constants
 from search.forms import SearchForm
 from sumo.utils import paginate, smart_int
-from wiki.models import Document, FIREFOX_VERSIONS, OPERATING_SYSTEMS
+from wiki.models import Document
 
 
 def jsonp_is_valid(func):
@@ -63,18 +63,6 @@ def search(request, template=None):
     r.setlist('category', [x for x in category if x > 0])
     exclude_category = [abs(x) for x in category if x < 0]
 
-    try:
-        fx = map(int, r.getlist('fx')) or [v.id for v in FIREFOX_VERSIONS]
-    except ValueError:
-        fx = [v.id for v in FIREFOX_VERSIONS]
-    r.setlist('fx', fx)
-
-    try:
-        os = map(int, r.getlist('os')) or [o.id for o in OPERATING_SYSTEMS]
-    except ValueError:
-        os = [o.id for o in OPERATING_SYSTEMS]
-    r.setlist('os', os)
-
     # Basic form
     if a == '0':
         r['w'] = r.get('w', constants.WHERE_BASIC)
@@ -82,6 +70,11 @@ def search(request, template=None):
     if a == '2':
         r['language'] = language
         r['a'] = '1'
+
+    # TODO: Rewrite so SearchForm is unbound initially and we can use `initial`
+    # on the form fields.
+    if 'include_archived' not in r:
+        r['include_archived'] = False
 
     search_form = SearchForm(r)
 
@@ -123,19 +116,6 @@ def search(request, template=None):
     filters_f = []
 
     # wiki filters
-    # Version and OS filters
-    if cleaned['fx']:
-        filters_w.append({
-            'filter': 'fx',
-            'value': cleaned['fx'],
-        })
-
-    if cleaned['os']:
-        filters_w.append({
-            'filter': 'os',
-            'value': cleaned['os'],
-        })
-
     # Category filter
     if cleaned['category']:
         filters_w.append({
@@ -164,6 +144,16 @@ def search(request, template=None):
                 'filter': 'tag',
                 'value': (t,),
                 })
+
+    # Archived bit
+    if a == '0' and not cleaned['include_archived']:
+        # Default to NO for basic search:
+        cleaned['include_archived'] = False
+    if not cleaned['include_archived']:
+        filters_w.append({
+            'filter': 'is_archived',
+            'value': (False,),
+        })
     # End of wiki filters
 
     # Support questions specific filters
@@ -174,19 +164,11 @@ def search(request, template=None):
             cleaned['has_helpful'] = constants.TERNARY_YES
 
         # These filters are ternary, they can be either YES, NO, or OFF
-        toggle_filters = ('is_locked', 'is_solved', 'has_answers',
+        ternary_filters = ('is_locked', 'is_solved', 'has_answers',
                           'has_helpful')
-        for filter_name in toggle_filters:
-            if cleaned[filter_name] == constants.TERNARY_YES:
-                filters_q.append({
-                    'filter': filter_name,
-                    'value': (True,),
-                })
-            if cleaned[filter_name] == constants.TERNARY_NO:
-                filters_q.append({
-                    'filter': filter_name,
-                    'value': (False,),
-                })
+        filters_q.extend(_ternary_filter(filter_name, cleaned[filter_name])
+                         for filter_name in ternary_filters
+                         if cleaned[filter_name])
 
         if cleaned['asked_by']:
             filters_q.append({
@@ -395,7 +377,8 @@ def suggestions(request):
     locale = sphinx_locale(locale_or_default(request.locale))
 
     results = []
-    filters_w = [{'filter': 'locale', 'value': (locale,)}]
+    filters_w = [{'filter': 'locale', 'value': (locale,)},
+                 {'filter': 'is_archived', 'value': (False,)}]
     filters_q = [{'filter': 'has_helpful', 'value': (True,)}]
 
     for client, filter, cls in [(wc, filters_w, Document),
@@ -419,3 +402,13 @@ def plugin(request):
     return jingo.render(request, 'search/plugin.html',
                         {'site': site, 'locale': request.locale},
                         mimetype='application/opensearchdescription+xml')
+
+
+def _ternary_filter(filter_name, ternary_value):
+    """Return a search query given a TERNARY_YES or TERNARY_NO.
+
+    Behavior for TERNARY_OFF is undefined.
+
+    """
+    return {'filter': filter_name,
+            'value': (ternary_value == constants.TERNARY_YES,)}

@@ -32,7 +32,9 @@ $(document).ready(function() {
     }
 
     if($('body').is('.document')) {
-        new ArticleHelpfulVote(false);
+        new k.AjaxVote('#helpful-vote form', {
+            positionMessage: false
+        });
     }
 
     $(".expando").each(function() {

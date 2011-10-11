@@ -1,0 +1,35 @@
+{% extends "messages/base.html" %}
+{% from "messages/includes/macros.html" import avatar_link, name_link %}
+{% set title = _('Messages') %}
+{% set crumbs = [(None, title)] %}
+{% set active_tab = 'inbox' %}
+
+{% block content %}
+  <section class="actions">
+    <a href="{{ url('messages.new') }}">{{ _('New Message') }}</a>
+  </section>
+  <article id="inbox" class="main message-list">
+    <h1>{{ title }}</h1>
+    {% if msgs %}
+      <ol>
+        {% for message in msgs %}
+          <li class="{% if message.unread %}unread{% endif %} {% if message.replied %}replied{% endif %}">
+            <span class="avatar">
+              {{ avatar_link(message.sender) }}
+            </span>
+            <span class="from user">
+              {{ name_link(message.sender) }}
+              {{ datetimeformat(message.created) }}
+            </span>
+            <a class="read" href="{{ url('messages.read', message.id) }}" title="{{ _('Read message') }}">
+              {{ message.message|truncate(length=200) }}
+            </a>
+            <a class="delete" href="{{ url('messages.delete', message.id) }}" title="{{ _('Delete message') }}">&#x2716;</a>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p>{{ _('There are no messages here.') }}</p>
+    {% endif %}
+  </article>
+{% endblock %}

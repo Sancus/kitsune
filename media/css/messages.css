@@ -1,0 +1,177 @@
+article.message-list ol {
+    list-style: none;
+}
+
+article.message-list li {
+    background-position: 1px center;
+    background-repeat: no-repeat;
+    border-bottom: 1px solid #eeeeee;
+    height: 48px;
+    padding: 3px 3px 3px 15px;
+    position: relative;
+}
+
+article.message-list a.read {
+    display: block;
+    height: 42px;
+    margin: 0 35px 0 189px;
+    padding-top: 1px;
+}
+
+article.message-list a.delete {
+    border-radius: 2px;
+    color: #ccc;
+    font-size: 12px;
+    padding: 0 2px;
+    position: absolute;
+    right: 10px;
+    top: 20px;
+}
+
+article.message-list a.delete:hover {
+    background: #447BC4;
+    color: #fff;
+    text-decoration: none;
+}
+
+article.message-list li:first-child {
+    border-top: 1px solid #eeeeee;
+}
+
+article.message-list li:before {
+    content: '';
+    display: inline;
+    float: left;
+    height: 6px;
+    width: 6px;
+}
+
+article.message-list li.unread {
+    background-color: #E0F0FF;
+    font-weight: bold;
+}
+
+article.message-list li.unread:before {
+    background: #447BC4;
+    -moz-border-radius: 6px;
+    -webkit-border-radius: 6px;
+    left: -8px;
+    padding: 0;
+    position: relative;
+    top: 20px;
+}
+
+article.message-list li.replied {
+    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAIAAADZF8uwAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABRSURBVChTY/z//z8DIcCEpqB5xQNMLSiKsKoA6mGEW4dLRW2EAtQkXCogVoMU4VcBVQQ0EL//oNbhV4dwONxeTA0oQYDLPBSTcLkMPcSxqgMA/5QdFJd/yTgAAAAASUVORK5CYII=);
+}
+
+article.message-list span.avatar,
+article.message-list span.user {
+    display: block;
+    float: left;
+}
+
+article.message-list span.avatar {
+    padding-right: 5px;
+    width: 48px;
+}
+
+article.message-list span.avatar img {
+    border: none;
+}
+
+article.message-list span.user {
+    color: #999;
+    padding-top: 1px;
+    width: 130px;
+}
+
+article.message-list span.user a {
+    color: #666;
+}
+
+article.message-list span.user time {
+    display: block;
+    font-size: 80%;
+}
+
+
+section.actions {
+    float: right;
+    padding: 20px 30px 0 0;
+}
+
+article#new-message ul {
+    list-style: none;
+}
+
+article#new-message li {
+    margin: 0 0 10px;
+}
+
+article#new-message label {
+    float: left;
+    padding: 7px 0 0;
+    width: 100px;
+}
+
+article#new-message input[type="text"],
+article#new-message textarea {
+    width: 600px;
+}
+
+article#new-message div.submit {
+    padding-left: 100px;
+}
+
+article#new-message ul.errorlist {
+    margin: 0 0 5px 100px;
+}
+
+article.message-view span.avatar {
+    float: left;
+    padding-right: 5px;
+}
+
+article.message-view span.from {
+    display: block;
+}
+
+article.message-view span.from a {
+    font-weight: bold;
+}
+
+article.message-view time {
+    color: #999;
+    font-size: 80%;
+    margin-left: 10px;
+}
+
+article.message-view div.message {
+    margin-left: 53px;
+    min-height: 50px;
+    padding: 10px 0;
+}
+
+article.message-view form.reply {
+    margin-left: 53px;
+    width: 377px;
+}
+
+article.message-view form ul {
+    list-style: none;
+}
+
+article.message-view label {
+    display: none;
+}
+
+article.message-view textarea {
+    height: 50px;
+    margin-bottom: 5px;
+    width: 350px;
+}
+
+article.message-view form.reply input[type=submit] {
+    float: right;
+}

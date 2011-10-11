@@ -1,15 +1,24 @@
-"""Data aggregators for dashboards"""
+"""Data aggregators for dashboards
 
+For the purposes of all these numbers, we pretend as if Documents with
+is_localizable=False or is_archived=True and Revisions with
+is_ready_for_localization=False do not exist.
+
+"""
 from django.conf import settings
 from django.db import connections, router
 from django.utils.datastructures import SortedDict
 
 import jingo
+from jinja2 import Markup
+from redis.exceptions import ConnectionError
 from tower import ugettext as _, ugettext_lazy as _lazy
 
 from dashboards import THIS_WEEK, ALL_TIME, PERIODS
 from sumo.urlresolvers import reverse
-from wiki.models import Document, MEDIUM_SIGNIFICANCE, MAJOR_SIGNIFICANCE
+from sumo.utils import redis_client
+from wiki.models import (Document, MEDIUM_SIGNIFICANCE, MAJOR_SIGNIFICANCE,
+                         TYPO_SIGNIFICANCE)
 
 
 MOST_VIEWED = 1
@@ -21,6 +30,24 @@ def _cursor():
     return connections[router.db_for_read(Document)].cursor()
 
 
+# FROM clause for selecting most-visited translations:
+most_visited_translation_from = (
+    'FROM wiki_document engdoc '
+    'LEFT JOIN wiki_document transdoc ON '
+        'transdoc.parent_id=engdoc.id '
+        'AND transdoc.locale=%s '
+    'LEFT JOIN dashboards_wikidocumentvisits ON engdoc.id='
+        'dashboards_wikidocumentvisits.document_id '
+        'AND dashboards_wikidocumentvisits.period=%s '
+    'WHERE engdoc.locale=%s '
+        'AND engdoc.is_localizable '
+        'AND NOT engdoc.is_archived '
+        'AND engdoc.latest_localizable_revision_id IS NOT NULL '
+        '{extra_where} '  # extra WHERE conditions
+    'ORDER BY dashboards_wikidocumentvisits.visits DESC, '
+             'COALESCE(transdoc.title, engdoc.title) ASC ').format
+
+
 def overview_rows(locale):
     """Return the iterable of dicts needed to draw the Overview table."""
     def percent_or_100(num, denom):
@@ -30,14 +57,20 @@ def overview_rows(locale):
     # rows, so it has no expanded, all-rows view, and thus needs no slug, no
     # "max" kwarg on rows(), etc. It doesn't fit the Readout signature, so we
     # don't shoehorn it in.
-    total = Document.uncached.exclude(current_revision=None).filter(
+
+    total = Document.uncached.filter(
                 locale=settings.WIKI_DEFAULT_LANGUAGE,
+                current_revision__isnull=False,
                 is_localizable=True,
-                is_archived=False).count()
+                latest_localizable_revision__isnull=False,
+                is_archived=False)
+    total_docs = total.count()
 
     # How many approved documents are there in German that have parents?
-    translated = Document.uncached.filter(locale=locale).exclude(
-        current_revision=None).exclude(parent=None).count()
+    translated = Document.uncached.filter(
+        locale=locale, is_archived=False).exclude(
+        current_revision=None).exclude(parent=None)
+    translated_docs = translated.count()
 
     # Of the top 20 most visited English articles, how many are not translated
     # into German?
@@ -45,46 +78,39 @@ def overview_rows(locale):
     cursor = _cursor()
     cursor.execute(
         'SELECT count(*) FROM '
-            '(SELECT trans.id FROM dashboards_wikidocumentvisits '
-                'LEFT JOIN wiki_document trans '
-                'ON dashboards_wikidocumentvisits.document_id=trans.parent_id '
-                'AND trans.locale=%s '
-             'WHERE dashboards_wikidocumentvisits.period=%s '
-             'ORDER BY dashboards_wikidocumentvisits.visits DESC '
+            '(SELECT transdoc.id '
+              + most_visited_translation_from(extra_where='') +
              'LIMIT %s) t1 '
         'WHERE t1.id IS NOT NULL',
-        (locale, THIS_WEEK, TOP_N))
+        (locale, THIS_WEEK, settings.WIKI_DEFAULT_LANGUAGE, TOP_N))
     popular_translated = cursor.fetchone()[0]
 
     # Template overview
-    template_total = Document.uncached.exclude(current_revision=None).filter(
-                locale=settings.WIKI_DEFAULT_LANGUAGE,
-                is_template=True,
-                is_localizable=True,
-                is_archived=False).count()
+    total_templates = total.filter(is_template=True).count()
 
     # How many approved templates are there in German that have parents?
-    template_translated = Document.uncached.filter(locale=locale,
-        is_template=True).exclude(current_revision=None).exclude(
-        parent=None).count()
+    translated_templates = translated.filter(is_template=True).count()
 
-    return {'most-visited': dict(title=_('Most-Visited Articles'),
+    return {'most-visited': dict(
+                 title=_('Most-Visited Articles'),
                  url='#' + MostVisitedTranslationsReadout.slug,
                  numerator=popular_translated, denominator=TOP_N,
                  percent=percent_or_100(popular_translated, TOP_N),
                  description=_('These are the top 20 most visited articles, '
                                'which account for over 50% of the traffic to '
                                'the Knowledge Base.')),
-            'templates': dict(title=_('Templates'),
+            'templates': dict(
+                 title=_('Templates'),
                  url='#' + TemplateTranslationsReadout.slug,
-                 numerator=template_translated, denominator=template_total,
-                 percent=percent_or_100(template_translated, template_total),
+                 numerator=translated_templates, denominator=total_templates,
+                 percent=percent_or_100(translated_templates, total_templates),
                  description=_('How many of the approved templates '
                                'which allow translations have an approved '
                                'translation into this language')),
-            'all': dict(title=_('All Knowledge Base Articles'),
-                 numerator=translated, denominator=total,
-                 percent=percent_or_100(translated, total),
+            'all': dict(
+                 title=_('All Knowledge Base Articles'),
+                 numerator=translated_docs, denominator=total_docs,
+                 percent=percent_or_100(translated_docs, total_docs),
                  description=_('How many of the approved English articles '
                                'which allow translations have an approved '
                                'translation into this language'))}
@@ -97,6 +123,7 @@ class Readout(object):
 
     """
     # title = _lazy(u'Title of Readout')
+    # description = _lazy(u'Paragraph of explanation')
     # short_title= = _lazy(u'Short Title of Readout for In-Page Links')
     # slug = 'URL slug for detail page'
     # details_link_text = _lazy(u'All articles from this readout...')
@@ -148,6 +175,11 @@ class Readout(object):
             {'rows': rows, 'column3_label': self.column3_label,
              'column4_label': self.column4_label})
 
+    @staticmethod
+    def should_show_to(user):
+        """Whether this readout should be shown to the user"""
+        return True
+
     # To override:
 
     def _query_and_params(self, max):
@@ -172,8 +204,8 @@ class Readout(object):
 
 class MostVisitedDefaultLanguageReadout(Readout):
     """Most-Visited readout for the default language"""
-    title = _lazy(u'Most-Visited Articles')
-    # No short_title; the link to this one is hard-coded in Overview readout
+    title = _lazy(u'Most Visited')
+    # No short_title; the Contributors dash lacks an Overview readout
     details_link_text = _lazy(u'All knowledge base articles...')
     slug = 'most-visited'
     column3_label = _lazy(u'Visits')
@@ -205,14 +237,14 @@ class MostVisitedDefaultLanguageReadout(Readout):
     def _format_row(self, (slug, title, visits, num_unreviewed)):
         needs_review = int(num_unreviewed > 0)
         status, view_name, dummy = self.review_statuses[needs_review]
-        return (dict(title=title,
-                     url=reverse('wiki.document', args=[slug],
-                                 locale=self.locale),
-                     visits=visits,
-                     status=status,
-                     status_url=reverse(view_name, args=[slug],
-                                        locale=self.locale)
-                                if view_name else ''))
+        return dict(title=title,
+                    url=reverse('wiki.document', args=[slug],
+                                locale=self.locale),
+                    visits=visits,
+                    status=status,
+                    status_url=reverse(view_name, args=[slug],
+                                       locale=self.locale)
+                               if view_name else '')
 
 
 class MostVisitedTranslationsReadout(MostVisitedDefaultLanguageReadout):
@@ -225,57 +257,48 @@ class MostVisitedTranslationsReadout(MostVisitedDefaultLanguageReadout):
     we should drop everything to translate.
 
     """
+    # No short_title; the link to this one is hard-coded in Overview readout
     slug = 'most-visited-translations'
-
-    # L10n: Replace "English" with your language.
     details_link_text = _lazy(u'All translations...')
 
     significance_statuses = {
         MEDIUM_SIGNIFICANCE:
             (_lazy(u'Update Needed'), 'wiki.edit_document', 'update'),
         MAJOR_SIGNIFICANCE:
-            (_lazy(u'Out of Date'), 'wiki.edit_document', 'out-of-date')}
+            (_lazy(u'Immediate Update Needed'), 'wiki.edit_document',
+             'out-of-date')}
 
     def _most_visited_query_and_params(self, max, extra_where=''):
-        # Out of Date or Update Needed: link to /edit.
+        # Immediate Update Needed or Update Needed: link to /edit.
         # Review Needed: link to /history.
         # These match the behavior of the corresponding readouts.
-        return (('SELECT engdoc.slug, engdoc.title, transdoc.slug, '
-                'transdoc.title, dashboards_wikidocumentvisits.visits, '
-                # The most significant approved change to the English article
-                # since the English revision the current translated revision is
-                # based on:
-                '(SELECT MAX(engrev.significance) '
-                 'FROM wiki_revision engrev, wiki_revision transrev '
-                 'WHERE engrev.is_approved '
-                 'AND transrev.id=transdoc.current_revision_id '
-                 'AND engrev.document_id=transdoc.parent_id '
-                 'AND engrev.id>transrev.based_on_id '
-                '), '
-                # Whether there are any unreviewed revs of the translation made
-                # since the current one:
-                '(SELECT EXISTS '
-                    '(SELECT * '
-                     'FROM wiki_revision transrev '
-                     'WHERE transrev.document_id=transdoc.id '
-                     'AND transrev.reviewed IS NULL '
-                     'AND (transrev.id>transdoc.current_revision_id OR '
-                          'transdoc.current_revision_id IS NULL)'
-                    ')'
-                ') '
-               'FROM wiki_document engdoc '
-               'LEFT JOIN wiki_document transdoc ON '
-                   'transdoc.parent_id=engdoc.id '
-                   'AND transdoc.locale=%s '
-               'LEFT JOIN dashboards_wikidocumentvisits ON engdoc.id='
-                   'dashboards_wikidocumentvisits.document_id '
-                   'AND dashboards_wikidocumentvisits.period=%s '
-               'WHERE engdoc.locale=%s AND engdoc.is_localizable AND '
-                   'NOT engdoc.is_archived '
-                   '{extra_where} '  # extra WHERE conditions
-               'ORDER BY dashboards_wikidocumentvisits.visits DESC, '
-                        'COALESCE(transdoc.title, engdoc.title) ASC' +
-               self._limit_clause(max)).format(extra_where=extra_where),
+        return (
+            'SELECT engdoc.slug, engdoc.title, transdoc.slug, '
+            'transdoc.title, dashboards_wikidocumentvisits.visits, '
+            # The most significant approved change to the English article
+            # between {the English revision the current translated revision is
+            # based on} and {the latest ready-for-localization revision}:
+            '(SELECT MAX(engrev.significance) '
+             'FROM wiki_revision engrev, wiki_revision transrev '
+             'WHERE engrev.is_approved '
+             'AND transrev.id=transdoc.current_revision_id '
+             'AND engrev.document_id=transdoc.parent_id '
+             'AND engrev.id>transrev.based_on_id '
+             'AND engrev.id<=engdoc.latest_localizable_revision_id'
+            '), '
+            # Whether there are any unreviewed revs of the translation made
+            # since the current one:
+            '(SELECT EXISTS '
+                '(SELECT * '
+                 'FROM wiki_revision transrev '
+                 'WHERE transrev.document_id=transdoc.id '
+                 'AND transrev.reviewed IS NULL '
+                 'AND (transrev.id>transdoc.current_revision_id OR '
+                      'transdoc.current_revision_id IS NULL)'
+                ')'
+            ') ' +
+            most_visited_translation_from(extra_where=extra_where) +
+            self._limit_clause(max),
             (self.locale,
              ALL_TIME if self.mode == ALL_TIME else THIS_WEEK,
              settings.WIKI_DEFAULT_LANGUAGE))
@@ -301,19 +324,17 @@ class MostVisitedTranslationsReadout(MostVisitedDefaultLanguageReadout):
                                  locale=self.locale)
             status_class = 'untranslated'
 
-        return (dict(title=title,
-                     url=reverse('wiki.document', args=[slug],
-                                 locale=locale),
-                     visits=visits,
-                     status=status,
-                     status_class=status_class,
-                     status_url=status_url))
+        return dict(title=title,
+                    url=reverse('wiki.document', args=[slug],
+                                locale=locale),
+                    visits=visits,
+                    status=status,
+                    status_class=status_class,
+                    status_url=status_url)
 
 
 class TemplateTranslationsReadout(MostVisitedTranslationsReadout):
     """Readout for templates in non-default languages
-
-    Adds a few subqueries to determine the status of translations.
 
     Shows the templates even if there are no translations of them yet.
     This draws attention to templates that we should drop everything to
@@ -322,9 +343,7 @@ class TemplateTranslationsReadout(MostVisitedTranslationsReadout):
     """
     title = _lazy(u'Templates')
     slug = 'template-translations'
-
-    # L10n: Replace "English" with your language.
-    details_link_text = _lazy(u'All templates in English...')
+    details_link_text = _lazy(u'All templates...')
 
     def _query_and_params(self, max):
         return self._most_visited_query_and_params(max,
@@ -332,7 +351,7 @@ class TemplateTranslationsReadout(MostVisitedTranslationsReadout):
 
 
 class UntranslatedReadout(Readout):
-    title = _lazy(u'Untranslated Articles')
+    title = _lazy(u'Untranslated')
     short_title = _lazy(u'Untranslated')
     details_link_text = _lazy(u'All untranslated articles...')
     slug = 'untranslated'
@@ -342,11 +361,15 @@ class UntranslatedReadout(Readout):
         # Incidentally, we tried this both as a left join and as a search
         # against an inner query returning translated docs, and the left join
         # yielded a faster-looking plan (on a production corpus).
+        #
+        # Find non-archived, localizable documents having at least one ready-
+        # for-localization revision. Of those, show the ones that have no
+        # translation.
         return ('SELECT parent.slug, parent.title, '
             'wiki_revision.reviewed, dashboards_wikidocumentvisits.visits '
             'FROM wiki_document parent '
             'INNER JOIN wiki_revision ON '
-                'parent.current_revision_id=wiki_revision.id '
+                'parent.latest_localizable_revision_id=wiki_revision.id '
             'LEFT JOIN wiki_document translated ON '
                 'parent.id=translated.parent_id AND translated.locale=%s '
             'LEFT JOIN dashboards_wikidocumentvisits ON '
@@ -369,16 +392,21 @@ class UntranslatedReadout(Readout):
         # take advantage of SPOTs (like for get_absolute_url()):
         d = Document(slug=slug, title=title,
                      locale=settings.WIKI_DEFAULT_LANGUAGE)
-        return (dict(title=d.title,
-                     url=d.get_absolute_url(),
-                     visits=visits,
-                     updated=reviewed))
+        return dict(title=d.title,
+                    url=d.get_absolute_url(),
+                    visits=visits,
+                    updated=reviewed)
 
 
 class OutOfDateReadout(Readout):
-    title = _lazy(u'Out-of-Date Translations')
-    short_title = _lazy(u'Out-of-Date')
-    details_link_text = _lazy(u'All out-of-date translations...')
+    title = _lazy(u'Immediate Updates Needed')
+    description = _lazy(
+        u'This indicates a major edit which changes the content of the article'
+         ' enough to hurt the value of the localization. Until it is updated, '
+         'the localized page will warn users that it may be outdated. You '
+         'should update these articles as soon as possible.')
+    short_title = _lazy(u'Immediate Updates Needed')
+    details_link_text = _lazy(u'All translations needing immediate updates...')
     slug = 'out-of-date'
     column4_label = _lazy(u'Out of date since')
 
@@ -396,10 +424,11 @@ class OutOfDateReadout(Readout):
         return ('SELECT transdoc.slug, transdoc.title, engrev.reviewed, '
             'dashboards_wikidocumentvisits.visits '
             'FROM wiki_document transdoc '
+            'INNER JOIN wiki_document engdoc ON transdoc.parent_id=engdoc.id '
             'INNER JOIN wiki_revision engrev ON engrev.id='
-            # The oldest english rev to have an approved level-30 change since
-            # the translated doc had an approved rev based on it. NULL if there
-            # is none:
+            # The oldest English rev to have an approved, ready-for-
+            # localization level-30 change since the translated doc had an
+            # approved rev based on it. NULL if there is none:
                 '(SELECT min(id) FROM wiki_revision '
                 # Narrow engrev rows to those representing revision of parent
                 # doc:
@@ -414,49 +443,58 @@ class OutOfDateReadout(Readout):
                 'AND wiki_revision.significance>=%s '
                 'AND %s='
                 # Completely filter out outer selections where 30 is not the
-                # max signif of english revisions since trans was last
+                # max signif of approved English revisions since trans was last
                 # approved. Other maxes will be shown by other readouts.
                 # Optimize: try "30 IN" if MySQL's statistics gatherer is
                 # stupid/nonexistent; the inner query should be able to bail
                 # out early. [Ed: No effect on EXPLAIN on admittedly light test
                 # corpus.]
                   '(SELECT MAX(engsince.significance) '
-                  'FROM wiki_revision engsince '
-                  'WHERE engsince.document_id=transdoc.parent_id '
-                  # Assumes that any approved revision became the current
-                  # revision at some point: we don't let the user go back and
-                  # approve revisions older than the latest approved one.
-                  'AND engsince.is_approved '
-                  'AND engsince.id>'
-                  # The English revision the current translation's based on:
-                    '(SELECT based_on_id FROM wiki_revision basedonrev '
-                    'WHERE basedonrev.id=transdoc.current_revision_id) '
+                   'FROM wiki_revision engsince '
+                   'WHERE engsince.document_id=transdoc.parent_id '
+                   # Assumes that any approved revision became the current
+                   # revision at some point: we don't let the user go back and
+                   # approve revisions older than the latest approved one.
+                   'AND engsince.is_approved '
+                   # Consider revisions between the one the last translation
+                   # was based on and the latest ready-for-l10n one.
+                   'AND engsince.id>'
+                   # The English revision the current translation's based on:
+                     '(SELECT based_on_id FROM wiki_revision basedonrev '
+                     'WHERE basedonrev.id=transdoc.current_revision_id) '
+                   'AND engsince.id<=engdoc.latest_localizable_revision_id'
                   ')'
                 ') '
             # Join up the visits table for stats:
             'LEFT JOIN dashboards_wikidocumentvisits ON '
                 'engrev.document_id=dashboards_wikidocumentvisits.document_id '
                 'AND dashboards_wikidocumentvisits.period=%s '
+            # We needn't check is_localizable, since the models ensure every
+            # document with translations has is_localizable set.
             'WHERE transdoc.locale=%s AND NOT transdoc.is_archived '
             + self._order_clause() + self._limit_clause(max),
             (MEDIUM_SIGNIFICANCE, self._max_significance, THIS_WEEK,
                 self.locale))
 
     def _order_clause(self):
-        return ('ORDER BY engrev.reviewed DESC'
-                if self.mode == MOST_RECENT
+        return ('ORDER BY engrev.reviewed DESC' if self.mode == MOST_RECENT
                 else 'ORDER BY dashboards_wikidocumentvisits.visits DESC, '
                      'transdoc.title ASC')
 
     def _format_row(self, (slug, title, reviewed, visits)):
-        return (dict(title=title,
-                     url=reverse('wiki.edit_document', args=[slug]),
-                     visits=visits, updated=reviewed))
+        return dict(title=title,
+                    url=reverse('wiki.edit_document', args=[slug]),
+                    visits=visits, updated=reviewed)
 
 
 class NeedingUpdatesReadout(OutOfDateReadout):
-    title = _lazy(u'Translations Needing Updates')
-    short_title = _lazy(u'Needing Updates')
+    title = _lazy(u'Updates Needed')
+    description = _lazy(
+        u"This signifies an edit that doesn't diminish the value of the "
+         'localized article: for example, rewording a paragraph. Localizers '
+         'are notified of this edit, but no warning is shown on the localized '
+         'page. You should update these articles soon.')
+    short_title = _lazy(u'Updates Needed')
     details_link_text = _lazy(u'All translations needing updates...')
     slug = 'needing-updates'
 
@@ -464,9 +502,9 @@ class NeedingUpdatesReadout(OutOfDateReadout):
 
 
 class UnreviewedReadout(Readout):
+    # L10n: Not just changes to translations but also unreviewed changes to
+    # docs in this locale that are not translations
     title = _lazy(u'Unreviewed Changes')
-    # ^ Not just changes to translations but also unreviewed chanages to docs
-    # in this locale that are not translations
 
     short_title = _lazy(u'Unreviewed', 'document')
     details_link_text = _lazy(u'All articles requiring review...')
@@ -498,18 +536,126 @@ class UnreviewedReadout(Readout):
             (THIS_WEEK, self.locale))
 
     def _order_clause(self):
-        return ('ORDER BY maxcreated DESC'
-                if self.mode == MOST_RECENT
+        return ('ORDER BY maxcreated DESC' if self.mode == MOST_RECENT
                 else 'ORDER BY dashboards_wikidocumentvisits.visits DESC, '
                      'wiki_document.title ASC')
 
     def _format_row(self, (slug, title, changed, users, visits)):
-        return (dict(title=title,
-                     url=reverse('wiki.document_revisions', args=[slug],
+        return dict(title=title,
+                    url=reverse('wiki.document_revisions',
+                                args=[slug],
+                                locale=self.locale),
+                    visits=visits,
+                    updated=changed,
+                    users=users)
+
+
+class UnhelpfulReadout(Readout):
+    title = _lazy(u'Unhelpful Documents')
+
+    short_title = _lazy(u'Unhelpful', 'document')
+    details_link_text = _lazy(u'All unhelpful articles...')
+    slug = 'unhelpful'
+    column3_label = _lazy(u'Total Votes')
+    column4_label = _lazy(u'Helpfulness')
+
+    # We don't have multiple modes, so let's just set it to 0 and forget it.
+    modes = [(0, _lazy('Most Unhelpful'))]
+
+    # This class is a namespace and doesn't get instantiated.
+    try:
+        hide_readout = redis_client('helpfulvotes').llen(settings.HELPFULVOTES_UNHELPFUL_KEY) == 0
+    except (AttributeError, ConnectionError):
+        hide_readout = True
+
+    def rows(self, max=None):
+        REDIS_KEY = settings.HELPFULVOTES_UNHELPFUL_KEY
+        try:
+            redis = redis_client('helpfulvotes')
+            if redis is None:
+                raise ConnectionError
+            length = redis.llen(REDIS_KEY)
+            max_get = max or length
+            output = redis.lrange(REDIS_KEY, 0, max_get)
+        except ConnectionError:
+            output = []
+
+        return [self._format_row(r) for r in output]
+
+    def _format_row(self, strresult):
+        result = strresult.split('::')
+        helpfulness = Markup('<span title="%+.1f%%">%.1f%%</span>' %
+                             (float(result[3]) * 100, float(result[2]) * 100))
+        return dict(title=result[6].decode('utf-8'),
+                     url=reverse('wiki.document_revisions',
+                                 args=[unicode(result[5], "utf-8")],
                                  locale=self.locale),
-                     visits=visits,
-                     updated=changed,
-                     users=users))
+                     visits=int(float(result[1])),
+                     custom=True,
+                     column4_data=helpfulness)
+
+
+class UnreadyForLocalizationReadout(Readout):
+    """Articles which have approved but unready revisions newer than their
+    latest ready-for-l10n ones"""
+    title = _lazy(u'Changes Not Ready For Localization')
+    description = _lazy(u'Articles which have approved revisions newer than '
+                         'the latest ready-for-localization one')
+    # No short_title; the Contributors dash lacks an Overview readout
+    details_link_text = _lazy(u'All articles with changes not ready for '
+                               'localization...')
+    slug = 'unready'
+    column4_label = _lazy(u'Approved')
+
+    def _query_and_params(self, max):
+        return ('SELECT wiki_document.slug, wiki_document.title, '
+            'MAX(wiki_revision.reviewed) maxreviewed, '
+            'visits.visits '
+            'FROM wiki_document '
+            'INNER JOIN wiki_revision ON '
+                        'wiki_document.id=wiki_revision.document_id '
+            'LEFT JOIN dashboards_wikidocumentvisits visits ON '
+                'wiki_document.id=visits.document_id AND '
+                'visits.period=%s '
+            'WHERE wiki_document.locale=%s '  # shouldn't be necessary
+            'AND NOT wiki_document.is_archived '
+            'AND wiki_document.is_localizable '
+            'AND (wiki_document.current_revision_id>'
+                 'wiki_document.latest_localizable_revision_id OR '
+                 'wiki_document.latest_localizable_revision_id IS NULL) '
+            # When picking the max(reviewed) date, consider only revisions that
+            # are ripe to be marked Ready:
+            'AND wiki_revision.is_approved '
+            'AND NOT wiki_revision.is_ready_for_localization '
+            'AND (wiki_revision.significance>%s OR '
+                 'wiki_revision.significance IS NULL) '  # initial revision
+            # An optimization: minimize rows before max():
+            'AND (wiki_revision.id>'
+                 'wiki_document.latest_localizable_revision_id OR '
+                 'wiki_document.latest_localizable_revision_id IS NULL) '
+            'GROUP BY wiki_document.id '
+            + self._order_clause() + self._limit_clause(max),
+            (THIS_WEEK, settings.WIKI_DEFAULT_LANGUAGE, TYPO_SIGNIFICANCE))
+
+    def _order_clause(self):
+        # Put the most recently approved articles first, as those are the most
+        # recent to have transitioned onto this dashboard or to change which
+        # revision causes them to be on this dashboard.
+        return ('ORDER BY maxreviewed DESC' if self.mode == MOST_RECENT
+                else 'ORDER BY visits.visits DESC, wiki_document.title ASC')
+
+    def _format_row(self, (slug, title, reviewed, visits)):
+        return dict(title=title,
+                    url=reverse('wiki.document_revisions',
+                                args=[slug],
+                                locale=settings.WIKI_DEFAULT_LANGUAGE),
+                    visits=visits,
+                    updated=reviewed)
+
+    @staticmethod
+    def should_show_to(user):
+        """Show unreadies only if the user can ready them."""
+        return user.has_perm('wiki.mark_ready_for_l10n')
 
 
 # L10n Dashboard tables that have their own whole-page views:
@@ -520,7 +666,8 @@ L10N_READOUTS = SortedDict((t.slug, t) for t in
 
 # Contributors ones:
 CONTRIBUTOR_READOUTS = SortedDict((t.slug, t) for t in
-    [MostVisitedDefaultLanguageReadout, UnreviewedReadout])
+    [MostVisitedDefaultLanguageReadout, UnreviewedReadout,
+     UnreadyForLocalizationReadout, UnhelpfulReadout])
 
 # All:
 READOUTS = L10N_READOUTS.copy()

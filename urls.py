@@ -23,8 +23,10 @@ urlpatterns = patterns('',
     (r'^gallery', include('gallery.urls')),
     (r'^army-of-awesome', include('customercare.urls')),
     (r'^chat', include('chat.urls')),
+    (r'^messages', include('messages.urls')),
     (r'^1', include('inproduct.urls')),
     (r'^postcrash', include('postcrash.urls')),
+    (r'^groups', include('groups.urls')),
 
     # Kitsune admin (not Django admin).
     (r'^admin/', include(admin.site.urls)),
@@ -34,9 +36,6 @@ urlpatterns = patterns('',
         {'domain': 'javascript', 'packages': ['kitsune']}, name='jsi18n'),
     # JavaScript Waffle.
     url(r'^wafflejs$', wafflejs, name='wafflejs'),
-
-    # Deprecated URLs.
-    (r'^forum', include('forums.old_urls')),
 
     (r'^', include('dashboards.urls')),
     (r'^', include('landings.urls')),

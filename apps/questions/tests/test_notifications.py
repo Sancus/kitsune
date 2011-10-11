@@ -115,7 +115,7 @@ class NotificationsTests(TestCaseBase):
         answer = Answer.objects.get(pk=1)
         question = answer.question
         self.client.login(username='jsocol', password='testpass')
-        post(self.client, 'questions.solution', args=[question.id, answer.id])
+        post(self.client, 'questions.solve', args=[question.id, answer.id])
 
         assert fire.called
 
@@ -148,7 +148,8 @@ class NotificationsTests(TestCaseBase):
         return question
 
     @mock.patch.object(Site.objects, 'get_current')
-    @mock.patch.object(settings._wrapped, 'TIDINGS_CONFIRM_ANONYMOUS_WATCHES', False)
+    @mock.patch.object(settings._wrapped, 'TIDINGS_CONFIRM_ANONYMOUS_WATCHES',
+                       False)
     def test_solution_notification(self, get_current):
         """Assert that hitting the watch toggle toggles and that proper mails
         are sent to anonymous and registered watchers."""
@@ -161,7 +162,7 @@ class NotificationsTests(TestCaseBase):
         answer = question.answers.all()[0]
         # Post a reply
         self.client.login(username='jsocol', password='testpass')
-        post(self.client, 'questions.solution', args=[question.id, answer.id])
+        post(self.client, 'questions.solve', args=[question.id, answer.id])
 
         # Order of emails is not important.
         attrs_eq(mail.outbox[0], to=['user47963@nowhere'],
@@ -176,7 +177,8 @@ class NotificationsTests(TestCaseBase):
         self._toggle_watch_question('solution', turn_on=False)
 
     @mock.patch.object(Site.objects, 'get_current')
-    @mock.patch.object(settings._wrapped, 'TIDINGS_CONFIRM_ANONYMOUS_WATCHES', False)
+    @mock.patch.object(settings._wrapped, 'TIDINGS_CONFIRM_ANONYMOUS_WATCHES',
+                       False)
     def test_answer_notification(self, get_current):
         """Assert that hitting the watch toggle toggles and that proper mails
         are sent to anonymous users, registered users, and the question

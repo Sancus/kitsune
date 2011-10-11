@@ -49,7 +49,7 @@
             "locale": "fr",
             "current_revision": 19,
             "is_template": false,
-            "html": "<p>ceci n'est pas une pipe\n</p><p>mon dieu! fa\u00e7on\n</p>",
+            "html": "<p>ceci n'est pas une pipe\n</p><p>mon dieu! fa\u00e7on\nmarque-page\n</p>",
             "slug": "le-title"
         }
     },
@@ -79,6 +79,20 @@
             "is_template": false,
             "html": "REDIRECT <a href=\"/foo\">bar</a>",
             "slug": "redirect-lorem-ipsum"
+        }
+    },
+    {
+        "pk": 7,
+        "model": "wiki.document",
+        "fields": {
+            "category": 10,
+            "title": "archived article",
+            "locale": "en-US",
+            "current_revision": 23,
+            "is_template": false,
+            "html": "<p>There are impalas in them thar hills!</a>",
+            "slug": "archived-article",
+            "is_archived": true
         }
     },
     {
@@ -172,6 +186,24 @@
         }
     },
     {
+        "pk": 23,
+        "model": "wiki.revision",
+        "fields": {
+            "comment": "",
+            "based_on": null,
+            "is_approved": true,
+            "created": "2010-09-29 09:09:52",
+            "summary": "some archived article with impalas",
+            "reviewed": "2010-09-29 09:10:08",
+            "content": "There are impalas in them thar hills!",
+            "significance": 10,
+            "keywords": "impalas",
+            "reviewer": 118533,
+            "document": 7,
+            "creator": 118533
+        }
+    },
+    {
         "pk": 30,
         "model": "wiki.revision",
         "fields": {
@@ -230,86 +262,6 @@
             "tag": 101,
             "content_type": ["wiki", "document"],
             "object_id": 1
-        }
-    },
-    {
-        "pk": 994,
-        "model": "wiki.firefoxversion",
-        "fields": {
-            "item_id": 1,
-            "document": 1
-        }
-    },
-    {
-        "pk": 995,
-        "model": "wiki.firefoxversion",
-        "fields": {
-            "item_id": 2,
-            "document": 2
-        }
-    },
-    {
-        "pk": 996,
-        "model": "wiki.firefoxversion",
-        "fields": {
-            "item_id": 3,
-            "document": 3
-        }
-    },
-    {
-        "pk": 997,
-        "model": "wiki.firefoxversion",
-        "fields": {
-            "item_id": 4,
-            "document": 4
-        }
-    },
-    {
-        "pk": 998,
-        "model": "wiki.firefoxversion",
-        "fields": {
-            "item_id": 4,
-            "document": 5
-        }
-    },
-    {
-        "pk": 2881,
-        "model": "wiki.operatingsystem",
-        "fields": {
-            "item_id": 1,
-            "document": 1
-        }
-    },
-    {
-        "pk": 2882,
-        "model": "wiki.operatingsystem",
-        "fields": {
-            "item_id": 2,
-            "document": 2
-        }
-    },
-    {
-        "pk": 2883,
-        "model": "wiki.operatingsystem",
-        "fields": {
-            "item_id": 3,
-            "document": 3
-        }
-    },
-    {
-        "pk": 2884,
-        "model": "wiki.operatingsystem",
-        "fields": {
-            "item_id": 4,
-            "document": 4
-        }
-    },
-    {
-        "pk": 2885,
-        "model": "wiki.operatingsystem",
-        "fields": {
-            "item_id": 5,
-            "document": 5
         }
     }
 ]

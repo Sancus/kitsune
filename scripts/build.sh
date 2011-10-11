@@ -3,7 +3,6 @@
 
 cd $WORKSPACE
 VENV=$WORKSPACE/venv
-VENDOR=$WORKSPACE/vendor
 
 echo "Starting build..."
 
@@ -35,11 +34,11 @@ fi
 source $VENV/bin/activate
 pip install -r requirements/tests-compiled.txt
 
+# Fix any mistakes with private repos.
+git submodule sync
+
 # Using a vendor library for the rest.
 git submodule update --init --recursive
-
-# Fix any mistakes with private repos.
-pushd vendor > /dev/null && git submodule sync && popd > /dev/null
 
 python manage.py update_product_details
 
@@ -61,7 +60,11 @@ SETTINGS
 
 echo "Starting tests..." `date`
 export FORCE_DB=1
-coverage run manage.py test --noinput --logging-clear-handlers --with-xunit
-coverage xml $(find apps lib -name '*.py')
+if [ -z $COVERAGE ]; then
+    python manage.py test --noinput --logging-clear-handlers --with-xunit
+else
+    coverage run manage.py test --noinput --logging-clear-handlers --with-xunit
+    coverage xml $(find apps lib -name '*.py')
+fi
 
 echo 'Booyahkasha!'

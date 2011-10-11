@@ -94,6 +94,7 @@ article.main div.submit {
 #change-avatar div.val-wrap {
     margin-right: 10px;
     width: auto;
+    line-height:35px;
 }
 
 /* profile view */
@@ -140,14 +141,36 @@ section#avatar-area {
     width: 7em;
 }
 
-section#main-area h2 {
+#main-area h2 {
     height: 20px;
     width: 100%;
 }
 
+#bio {
+    float: left;
+    width: 60%;
+}
+
+#groups {
+    float: left;
+    margin-left: 5%;
+    width: 35%;
+}
+
+#groups ul {
+    list-style: none;
+}
+
+#admin-actions a.edit {
+    background: transparent url(../img/icons.actions.png) no-repeat left -25px;
+    float: right;
+    padding: 0 0 0 18px;
+}
+
 body.register p,
-#profile p {
-    margin: 1em 0;
+#profile p,
+#groups ul {
+    margin: 0.25em 0 1em;
 }
 
 /* delete avatar */

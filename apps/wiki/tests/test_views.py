@@ -7,8 +7,10 @@ import mock
 from nose.tools import eq_
 from pyquery import PyQuery as pq
 
+from questions.tests import tags_eq
 from sumo.tests import TestCase, LocalizingClient
 from sumo.urlresolvers import reverse
+from users.tests import user, add_permission
 from wiki.models import VersionMetadata, Document
 from wiki.tests import doc_rev, document, new_document_data, revision
 from wiki.views import _version_groups
@@ -18,11 +20,12 @@ class VersionGroupTests(TestCase):
     def test_version_groups(self):
         """Make sure we correctly set up browser/version mappings for the JS"""
         versions = [VersionMetadata(1, 'Firefox 4.0', 'Firefox 4.0', 'fx4',
-                                    5.0, False),
+                                    5.0, False, True),
                     VersionMetadata(2, 'Firefox 3.5-3.6', 'Firefox 3.5-3.6',
-                                    'fx35', 4.0, False),
+                                    'fx35', 4.0, False, False),
                     VersionMetadata(4, 'Firefox Mobile 1.1',
-                                    'Firefox Mobile 1.1', 'm11', 2.0, False)]
+                                    'Firefox Mobile 1.1', 'm11', 2.0, False,
+                                    True)]
         want = {'fx': [(4.0, '35'), (5.0, '4')],
                 'm': [(2.0, '11')]}
         eq_(want, _version_groups(versions))
@@ -123,24 +126,20 @@ class DocumentEditingTests(TestCase):
         eq_(new_title, Document.uncached.get(slug=d.slug).title)
         assert Document.uncached.get(title=old_title).redirect_url()
 
-    def test_changing_metadata(self):
-        """Changing metadata works as expected."""
+    def test_changing_products(self):
+        """Changing products works as expected."""
         client = LocalizingClient()
         client.login(username='admin', password='testpass')
         d, r = doc_rev()
         data = new_document_data()
-        data.update({'firefox_versions': [1, 2, 3],
-                     'operating_systems': [1, 3],
+        data.update({'products': ['desktop', 'sync'],
                      'form': 'doc'})
         client.post(reverse('wiki.edit_document', args=[d.slug]), data)
-        eq_(3, d.firefox_versions.count())
-        eq_(2, d.operating_systems.count())
-        data.update({'firefox_versions': [1, 2],
-                     'operating_systems': [2],
+        tags_eq(d, ['desktop', 'sync'])
+        data.update({'products': ['mobile'],
                      'form': 'doc'})
         client.post(reverse('wiki.edit_document', args=[data['slug']]), data)
-        eq_(2, d.firefox_versions.count())
-        eq_(1, d.operating_systems.count())
+        tags_eq(d, ['mobile'])
 
     @mock.patch.object(Site.objects, 'get_current')
     def test_invalid_slug(self, get_current):
@@ -176,3 +175,49 @@ class DocumentEditingTests(TestCase):
         eq_(int(input.value), en_r.pk)
         eq_(doc('#id_keywords')[0].attrib['value'], 'oui')
         eq_(doc('#id_summary').text(), 'lipsum')
+
+
+class AddRemoveContributorTests(TestCase):
+    def setUp(self):
+        super(AddRemoveContributorTests, self).setUp()
+        self.user = user(save=True)
+        self.contributor = user(save=True)
+        add_permission(self.user, Document, 'change_document')
+        self.client.login(username=self.user.username, password='testpass')
+        self.revision = revision(save=True)
+        self.document = self.revision.document
+
+    def test_add_contributor(self):
+        url = reverse('wiki.add_contributor', locale='en-US',
+                      args=[self.document.slug])
+        r = self.client.get(url)
+        eq_(405, r.status_code)
+        r = self.client.post(url, {'users': self.contributor.username})
+        eq_(302, r.status_code)
+        assert self.contributor in self.document.contributors.all()
+
+    def test_remove_contributor(self):
+        self.document.contributors.add(self.contributor)
+        url = reverse('wiki.remove_contributor', locale='en-US',
+                      args=[self.document.slug, self.contributor.id])
+        r = self.client.get(url)
+        eq_(200, r.status_code)
+        r = self.client.post(url)
+        eq_(302, r.status_code)
+        assert not self.contributor in self.document.contributors.all()
+
+
+class VoteTests(TestCase):
+    client_class = LocalizingClient
+
+    def test_helpful_vote_bad_id(self):
+        """Throw helpful_vote a bad ID, and see if it crashes."""
+        response = self.client.post(reverse('wiki.document_vote', args=['hi']),
+                                    {'revision_id': 'x'})
+        eq_(404, response.status_code)
+
+    def test_helpful_vote_no_id(self):
+        """Throw helpful_vote a POST without an ID and see if it 400s."""
+        response = self.client.post(reverse('wiki.document_vote', args=['hi']),
+                                    {})
+        eq_(400, response.status_code)
