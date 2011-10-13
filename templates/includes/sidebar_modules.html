@@ -14,7 +14,7 @@
         <li><a href="{{ url('wiki.document', 'localize-firefox-help') }}">{{ _('Translate Articles') }}</a></li>
         <li><a href="{{ url('forums.forums') }}">{{ _('Contributors Forums') }}</a></li>
         {% if request.locale == default_language %}
-          <li><a href="{{ url('questions.questions') }}">{{ _('Support Forum') }}</a></li>
+          <li><a href="{{ url('wiki.document', 'ask') }}">{{ _('Support Forum') }}</a></li>
         {% endif %}
       </ul>
     </section>
