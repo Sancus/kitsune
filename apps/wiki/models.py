@@ -64,6 +64,7 @@ CATEGORIES = (
     (40, _lazy(u'Administration')),
     (50, _lazy(u'Navigation')),
     (60, _lazy(u'Templates')),
+    (70, _lazy(u'Tips')),
 )
 
 # FF versions used to filter article searches, power {for} tags, etc.:
