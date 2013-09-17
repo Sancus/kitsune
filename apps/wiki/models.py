@@ -107,13 +107,15 @@ GROUPED_FIREFOX_VERSIONS = (
         VersionMetadata(13, _lazy(u'Thunderbird 13'),
                         _lazy(u'Thunderbird 13'), 'tb13', 13.9999, False, False),
         VersionMetadata(14, _lazy(u'Thunderbird 14'),
-                        _lazy(u'Thunderbird 14'), 'tb14', 14.9999, True, False),
+                        _lazy(u'Thunderbird 14'), 'tb14', 14.9999, False, False),
         VersionMetadata(15, _lazy(u'Thunderbird 15'),
                         _lazy(u'Thunderbird 15'), 'tb15', 15.9999, True, False),
         VersionMetadata(16, _lazy(u'Thunderbird 16'),
                         _lazy(u'Thunderbird 16'), 'tb16', 16.9999, True, False),
         VersionMetadata(17, _lazy(u'Thunderbird 17'),
-                        _lazy(u'Thunderbird 17'), 'tb17', 17.9999, True, True),
+                        _lazy(u'Thunderbird 17'), 'tb17', 17.9999, True, False),
+        VersionMetadata(24, _lazy(u'Thunderbird 24'),
+                        _lazy(u'Thunderbird 24'), 'tb24', 24.9999, True, True),
         VersionMetadata(1, _lazy(u'Thunderbird 3.1'),
                         _lazy(u'Thunderbird 3.1'), 'tb31', 3.1999, True, False),)),)
 
